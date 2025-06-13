@@ -43,6 +43,7 @@ release: ## Release target with type argument. Usage: make release type=patch|mi
 		echo "Current version: $(VERSION)"; \
 		echo "Next version: $(call next_version,$(type))"; \
 		echo "Creating new tag $(call next_version,$(type))..."; \
+		git push origin master --no-verify --force-with-lease; \
 		git tag -a $(call next_version,$(type)) -m "Release $(call next_version,$(type))"; \
 		git push origin $(call next_version,$(type)) --no-verify --force-with-lease; \
 		echo "Tag $(call next_version,$(type)) has been created and pushed"; \
