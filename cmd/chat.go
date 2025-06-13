@@ -20,7 +20,7 @@ var (
 	model    string
 	baseURL  string
 	prompt   string
-	args     []string
+	argFlags []string
 )
 
 // chatCmd represents the chat command
@@ -90,7 +90,7 @@ user = "User prompt with optional {{input}} placeholder"`,
 		}
 
 		// Format message with prompt and arguments
-		formattedMessage, err := llmc.FormatMessage(message, prompt, config.PromptDir, args)
+		formattedMessage, err := llmc.FormatMessage(message, prompt, config.PromptDir, argFlags)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
@@ -115,5 +115,5 @@ func init() {
 	chatCmd.Flags().StringVarP(&model, "model", "m", viper.GetString("model"), "Model to use")
 	chatCmd.Flags().StringVar(&baseURL, "base-url", viper.GetString("base_url"), "Base URL for the API")
 	chatCmd.Flags().StringVarP(&prompt, "prompt", "p", "", "Name of the prompt template (without .toml extension)")
-	chatCmd.Flags().StringArrayVar(&args, "arg", []string{}, "Key-value pairs for prompt template (format: key:value)")
+	chatCmd.Flags().StringArrayVar(&argFlags, "arg", []string{}, "Key-value pairs for prompt template (format: key:value)")
 }
