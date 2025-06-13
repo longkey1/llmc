@@ -6,6 +6,7 @@ import (
 
 	"github.com/longkey1/llmc/internal/llmc"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 )
 
 // configCmd represents the config command
@@ -23,6 +24,7 @@ This command shows all configuration values loaded from the config file and envi
 		}
 
 		// Display configuration values
+		fmt.Printf("ConfigFile: %s\n", viper.ConfigFileUsed())
 		fmt.Printf("Provider: %s\n", config.Provider)
 		fmt.Printf("BaseURL: %s\n", config.BaseURL)
 		fmt.Printf("Model: %s\n", config.Model)
