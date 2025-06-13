@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-
-	"github.com/longkey1/llmc/internal/config"
 )
 
 const (
@@ -31,13 +29,20 @@ type GeminiPart struct {
 	Text string `json:"text"`
 }
 
+// Config defines the configuration interface for Gemini provider
+type Config interface {
+	GetModel() string
+	GetBaseURL() string
+	GetToken() string
+}
+
 // Provider implements the llmc.Provider interface for Gemini
 type Provider struct {
-	config *config.Config
+	config Config
 }
 
 // NewProvider creates a new Gemini provider instance
-func NewProvider(config *config.Config) *Provider {
+func NewProvider(config Config) *Provider {
 	return &Provider{
 		config: config,
 	}
@@ -65,11 +70,11 @@ func (p *Provider) Chat(message string) (string, error) {
 	}
 
 	// Create HTTP request
-	baseURL := p.config.BaseURL
+	baseURL := p.config.GetBaseURL()
 	if baseURL == "" {
 		baseURL = DefaultBaseURL
 	}
-	url := fmt.Sprintf("%s/models/%s:generateContent?key=%s", baseURL, p.config.Model, p.config.Token)
+	url := fmt.Sprintf("%s/models/%s:generateContent?key=%s", baseURL, p.config.GetModel(), p.config.GetToken())
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonData))
 	if err != nil {
 		return "", fmt.Errorf("error creating request: %v", err)

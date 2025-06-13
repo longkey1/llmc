@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-
-	"github.com/longkey1/llmc/internal/config"
 )
 
 const (
@@ -28,13 +26,20 @@ type OpenAIMessage struct {
 	Content string `json:"content"`
 }
 
+// Config defines the configuration interface for OpenAI provider
+type Config interface {
+	GetModel() string
+	GetBaseURL() string
+	GetToken() string
+}
+
 // Provider implements the llmc.Provider interface for OpenAI
 type Provider struct {
-	config *config.Config
+	config Config
 }
 
 // NewProvider creates a new OpenAI provider instance
-func NewProvider(config *config.Config) *Provider {
+func NewProvider(config Config) *Provider {
 	return &Provider{
 		config: config,
 	}
@@ -44,7 +49,7 @@ func NewProvider(config *config.Config) *Provider {
 func (p *Provider) Chat(message string) (string, error) {
 	// Prepare the request body
 	reqBody := OpenAIRequest{
-		Model: p.config.Model,
+		Model: p.config.GetModel(),
 		Messages: []OpenAIMessage{
 			{
 				Role:    "user",
@@ -60,14 +65,14 @@ func (p *Provider) Chat(message string) (string, error) {
 	}
 
 	// Create HTTP request
-	req, err := http.NewRequest("POST", p.config.BaseURL+"/chat/completions", bytes.NewBuffer(jsonData))
+	req, err := http.NewRequest("POST", p.config.GetBaseURL()+"/chat/completions", bytes.NewBuffer(jsonData))
 	if err != nil {
 		return "", fmt.Errorf("error creating request: %v", err)
 	}
 
 	// Set headers
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+p.config.Token)
+	req.Header.Set("Authorization", "Bearer "+p.config.GetToken())
 
 	// Send request
 	client := &http.Client{}
