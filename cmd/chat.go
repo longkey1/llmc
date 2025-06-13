@@ -1,40 +1,122 @@
 /*
 Copyright © 2025 NAME HERE <EMAIL ADDRESS>
-
 */
 package cmd
 
 import (
+	"bufio"
 	"fmt"
+	"io"
+	"os"
+	"path/filepath"
+	"strings"
 
+	"github.com/longkey1/llmc/internal/gemini"
+	"github.com/longkey1/llmc/internal/llmc"
+	"github.com/longkey1/llmc/internal/openai"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
+)
+
+var (
+	provider string
+	model    string
+	baseURL  string
+	prompt   string
 )
 
 // chatCmd represents the chat command
 var chatCmd = &cobra.Command{
-	Use:   "chat",
-	Short: "A brief description of your command",
-	Long: `A longer description that spans multiple lines and likely contains examples
-and usage of using your command. For example:
+	Use:   "chat [message]",
+	Short: "Send a message to the LLM",
+	Long: `Send a message to the LLM and print the response.
+If no message is provided as an argument, it reads from stdin.
 
-Cobra is a CLI library for Go that empowers applications.
-This application is a tool to generate the needed files
-to quickly create a Cobra application.`,
+You can specify the provider, model, base URL, and prompt using flags.
+If not specified, the values will be taken from the configuration file.
+
+The prompt file should be in TOML format with the following structure:
+system = "System prompt with optional {{input}} placeholder"
+user = "User prompt with optional {{input}} placeholder"`,
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println("chat called")
+		// Load configuration
+		config := llmc.Config{
+			Provider:  provider,
+			Model:     model,
+			BaseURL:   baseURL,
+			Token:     viper.GetString("token"),
+			PromptDir: viper.GetString("prompt_dir"),
+		}
+
+		// Select provider
+		var llmProvider llmc.Provider
+		switch config.Provider {
+		case openai.ProviderName:
+			llmProvider = openai.NewProvider(config)
+		case gemini.ProviderName:
+			llmProvider = gemini.NewProvider(config)
+		default:
+			fmt.Fprintf(os.Stderr, "Unsupported provider: %s\n", config.Provider)
+			os.Exit(1)
+		}
+
+		// Load prompt if specified
+		var promptTemplate *llmc.Prompt
+		if prompt != "" {
+			// Add .toml extension if not present
+			promptFile := prompt
+			if !strings.HasSuffix(promptFile, ".toml") {
+				promptFile = promptFile + ".toml"
+			}
+			// Construct full path to prompt file
+			promptPath := filepath.Join(config.PromptDir, promptFile)
+
+			var err error
+			promptTemplate, err = llmc.LoadPrompt(promptPath)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error loading prompt file: %v\n", err)
+				os.Exit(1)
+			}
+		}
+
+		// Get message from arguments or stdin
+		var message string
+		if len(args) > 0 {
+			message = strings.Join(args, " ")
+		} else {
+			// Read from stdin
+			reader := bufio.NewReader(os.Stdin)
+			input, err := reader.ReadString('\n')
+			if err != nil && err != io.EOF {
+				fmt.Fprintf(os.Stderr, "Error reading from stdin: %v\n", err)
+				os.Exit(1)
+			}
+			message = strings.TrimSpace(input)
+		}
+
+		// Format message with prompt if specified
+		if promptTemplate != nil {
+			systemPrompt, userPrompt := promptTemplate.FormatPrompt(message)
+			message = fmt.Sprintf("System: %s\n\nUser: %s", systemPrompt, userPrompt)
+		}
+
+		// Send message and print response
+		response, err := llmProvider.Chat(message)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+
+		fmt.Println(response)
 	},
 }
 
 func init() {
 	rootCmd.AddCommand(chatCmd)
 
-	// Here you will define your flags and configuration settings.
-
-	// Cobra supports Persistent Flags which will work for this command
-	// and all subcommands, e.g.:
-	// chatCmd.PersistentFlags().String("foo", "", "A help for foo")
-
-	// Cobra supports local flags which will only run when this command
-	// is called directly, e.g.:
-	// chatCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
+	// Add command options
+	chatCmd.Flags().StringVarP(&provider, "provider", "p", "", "LLM provider (openai or gemini)")
+	chatCmd.Flags().StringVarP(&model, "model", "m", "", "Model to use")
+	chatCmd.Flags().StringVarP(&baseURL, "base-url", "b", "", "Base URL for the API")
+	chatCmd.Flags().StringVarP(&prompt, "prompt", "f", "", "Name of the prompt template (without .toml extension)")
 }
