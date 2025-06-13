@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-
-	"github.com/longkey1/llmc/internal/llmc"
 )
 
 const (
@@ -30,13 +28,25 @@ type OpenAIMessage struct {
 
 // Provider implements the llmc.Provider interface for OpenAI
 type Provider struct {
-	config *llmc.Config
+	config struct {
+		Provider  string
+		BaseURL   string
+		Model     string
+		Token     string
+		PromptDir string
+	}
 }
 
 // NewProvider creates a new OpenAI provider instance
-func NewProvider(config *llmc.Config) *Provider {
+func NewProvider(config interface{}) *Provider {
 	return &Provider{
-		config: config,
+		config: config.(struct {
+			Provider  string
+			BaseURL   string
+			Model     string
+			Token     string
+			PromptDir string
+		}),
 	}
 }
 

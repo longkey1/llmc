@@ -6,13 +6,11 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-
-	"github.com/longkey1/llmc/internal/llmc"
 )
 
 const (
 	ProviderName   = "gemini"
-	DefaultBaseURL = "https://generativelanguage.googleapis.com/v1beta"
+	DefaultBaseURL = "https://generativelanguage.googleapis.com/v1"
 	DefaultModel   = "gemini-pro"
 )
 
@@ -33,17 +31,29 @@ type GeminiPart struct {
 
 // Provider implements the llmc.Provider interface for Gemini
 type Provider struct {
-	config llmc.Config
-}
-
-// NewProvider creates a new Gemini provider instance
-func NewProvider(config llmc.Config) *Provider {
-	return &Provider{
-		config: config,
+	config struct {
+		Provider  string
+		BaseURL   string
+		Model     string
+		Token     string
+		PromptDir string
 	}
 }
 
-// Chat sends a message to Gemini's generate content API and returns the response
+// NewProvider creates a new Gemini provider instance
+func NewProvider(config interface{}) *Provider {
+	return &Provider{
+		config: config.(struct {
+			Provider  string
+			BaseURL   string
+			Model     string
+			Token     string
+			PromptDir string
+		}),
+	}
+}
+
+// Chat sends a message to Gemini's API and returns the response
 func (p *Provider) Chat(message string) (string, error) {
 	// Prepare the request body
 	reqBody := GeminiRequest{

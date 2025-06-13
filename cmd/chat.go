@@ -8,12 +8,9 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 	"strings"
 
-	"github.com/longkey1/llmc/internal/gemini"
 	"github.com/longkey1/llmc/internal/llmc"
-	"github.com/longkey1/llmc/internal/openai"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -43,7 +40,7 @@ system = "System prompt with optional {{input}} placeholder"
 user = "User prompt with optional {{input}} placeholder"`,
 	Run: func(cmd *cobra.Command, args []string) {
 		// Load configuration
-		config := llmc.Config{
+		config := &llmc.Config{
 			Provider:  provider,
 			Model:     model,
 			BaseURL:   baseURL,
@@ -52,34 +49,10 @@ user = "User prompt with optional {{input}} placeholder"`,
 		}
 
 		// Select provider
-		var llmProvider llmc.Provider
-		switch config.Provider {
-		case "openai":
-			llmProvider = openai.NewProvider(&config)
-		case "gemini":
-			llmProvider = gemini.NewProvider(config)
-		default:
-			fmt.Fprintf(os.Stderr, "Unsupported provider: %s\n", config.Provider)
+		llmProvider, err := llmc.NewProvider(config)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
-		}
-
-		// Load prompt if specified
-		var promptTemplate *llmc.Prompt
-		if prompt != "" {
-			// Add .toml extension if not present
-			promptFile := prompt
-			if !strings.HasSuffix(promptFile, ".toml") {
-				promptFile = promptFile + ".toml"
-			}
-			// Construct full path to prompt file
-			promptPath := filepath.Join(config.PromptDir, promptFile)
-
-			var err error
-			promptTemplate, err = llmc.LoadPrompt(promptPath)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Error loading prompt file: %v\n", err)
-				os.Exit(1)
-			}
 		}
 
 		// Get message from arguments or stdin
@@ -98,13 +71,14 @@ user = "User prompt with optional {{input}} placeholder"`,
 		}
 
 		// Format message with prompt if specified
-		if promptTemplate != nil {
-			systemPrompt, userPrompt := promptTemplate.FormatPrompt(message)
-			message = fmt.Sprintf("System: %s\n\nUser: %s", systemPrompt, userPrompt)
+		formattedMessage, err := llmc.FormatMessage(message, prompt, config.PromptDir)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
 		}
 
 		// Send message and print response
-		response, err := llmProvider.Chat(message)
+		response, err := llmProvider.Chat(formattedMessage)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
@@ -118,8 +92,8 @@ func init() {
 	rootCmd.AddCommand(chatCmd)
 
 	// Add command options
-	chatCmd.Flags().StringVarP(&provider, "provider", "p", "", "LLM provider (openai or gemini)")
-	chatCmd.Flags().StringVarP(&model, "model", "m", "", "Model to use")
-	chatCmd.Flags().StringVarP(&baseURL, "base-url", "b", "", "Base URL for the API")
-	chatCmd.Flags().StringVarP(&prompt, "prompt", "f", "", "Name of the prompt template (without .toml extension)")
+	chatCmd.Flags().StringVar(&provider, "provider", viper.GetString("provider"), "LLM provider (openai or gemini)")
+	chatCmd.Flags().StringVarP(&model, "model", "m", viper.GetString("model"), "Model to use")
+	chatCmd.Flags().StringVar(&baseURL, "base-url", viper.GetString("base_url"), "Base URL for the API")
+	chatCmd.Flags().StringVarP(&prompt, "prompt", "p", "", "Name of the prompt template (without .toml extension)")
 }
