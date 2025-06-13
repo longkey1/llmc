@@ -47,6 +47,9 @@ llmc chat "Hello, how are you?"
 
 # Read from stdin
 echo "Hello, how are you?" | llmc chat
+
+# Use default editor (from EDITOR environment variable)
+llmc chat -e
 ```
 
 ### Using Prompts
@@ -79,7 +82,29 @@ llmc chat --prompt example "Hello"
 
 # Pass arguments to prompt template
 llmc chat --prompt example --arg name:John --arg age:30 "Hello"
+
+# Use default editor
+llmc chat -e
+# or
+llmc chat --editor
 ```
+
+### Input Methods
+
+The tool supports three input methods, with the following priority:
+
+1. Editor (when `-e` or `--editor` is specified):
+   - Opens the default editor specified by the `EDITOR` environment variable
+   - All other input methods (arguments and stdin) are ignored
+   - Example: `llmc chat -e`
+
+2. Command line arguments:
+   - Used when arguments are provided and editor is not specified
+   - Example: `llmc chat "Hello, world!"`
+
+3. Standard input:
+   - Used when no arguments are provided and editor is not specified
+   - Example: `echo "Hello, world!" | llmc chat`
 
 ### Argument Format
 
