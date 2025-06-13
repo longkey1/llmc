@@ -21,7 +21,14 @@ llmc init
 
 This will create a configuration file at `$HOME/.config/llmc/config.toml` with default settings.
 
-2. Edit the configuration file to set your API keys and preferences:
+2. View current configuration:
+```bash
+llmc config
+```
+
+This will display all current configuration values, with the API token masked for security.
+
+3. Edit the configuration file to set your API keys and preferences:
 ```toml
 provider = "openai"  # or "gemini"
 base_url = "https://api.openai.com/v1"  # or Gemini's API URL
