@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"strings"
 
 	"github.com/longkey1/llmc/internal/llmc"
@@ -16,11 +17,12 @@ import (
 )
 
 var (
-	provider string
-	model    string
-	baseURL  string
-	prompt   string
-	argFlags []string
+	provider  string
+	model     string
+	baseURL   string
+	prompt    string
+	argFlags  []string
+	useEditor bool
 )
 
 // chatCmd represents the chat command
@@ -32,6 +34,7 @@ This command performs a one-time API call to the specified LLM provider.
 It does not maintain conversation history or provide interactive chat functionality.
 
 If no message is provided as an argument, it reads from stdin.
+If --editor flag is set, it opens the default editor (from EDITOR environment variable) to compose the message.
 
 You can specify the provider, model, base URL, and prompt using flags.
 If not specified, the values will be taken from the configuration file.
@@ -74,9 +77,15 @@ user = "User prompt with optional {{input}} placeholder"`,
 			os.Exit(1)
 		}
 
-		// Get message from arguments or stdin
+		// Get message from arguments, editor, or stdin
 		var message string
-		if len(args) > 0 {
+		if useEditor {
+			message, err = getMessageFromEditor()
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+				os.Exit(1)
+			}
+		} else if len(args) > 0 {
 			message = strings.Join(args, " ")
 		} else {
 			// Read from stdin
@@ -107,6 +116,39 @@ user = "User prompt with optional {{input}} placeholder"`,
 	},
 }
 
+// getMessageFromEditor opens the default editor and returns the edited message
+func getMessageFromEditor() (string, error) {
+	editor := os.Getenv("EDITOR")
+	if editor == "" {
+		return "", fmt.Errorf("EDITOR environment variable is not set")
+	}
+
+	// Create a temporary file
+	tmpFile, err := os.CreateTemp("", "llmc-*.txt")
+	if err != nil {
+		return "", fmt.Errorf("failed to create temporary file: %v", err)
+	}
+	defer os.Remove(tmpFile.Name())
+
+	// Open the editor
+	cmd := exec.Command(editor, tmpFile.Name())
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	if err := cmd.Run(); err != nil {
+		return "", fmt.Errorf("failed to open editor: %v", err)
+	}
+
+	// Read the edited content
+	content, err := os.ReadFile(tmpFile.Name())
+	if err != nil {
+		return "", fmt.Errorf("failed to read edited content: %v", err)
+	}
+
+	return strings.TrimSpace(string(content)), nil
+}
+
 func init() {
 	rootCmd.AddCommand(chatCmd)
 
@@ -116,4 +158,5 @@ func init() {
 	chatCmd.Flags().StringVar(&baseURL, "base-url", viper.GetString("base_url"), "Base URL for the API")
 	chatCmd.Flags().StringVarP(&prompt, "prompt", "p", "", "Name of the prompt template (without .toml extension)")
 	chatCmd.Flags().StringArrayVar(&argFlags, "arg", []string{}, "Key-value pairs for prompt template (format: key:value)")
+	chatCmd.Flags().BoolVarP(&useEditor, "editor", "e", false, "Use default editor (from EDITOR environment variable) to compose message")
 }
