@@ -11,9 +11,20 @@ import (
 type Config struct {
 	Provider  string `toml:"provider"`
 	BaseURL   string `toml:"base_url"`
-	Token     string `toml:"token"`
 	Model     string `toml:"model"`
+	Token     string `toml:"token"`
 	PromptDir string `toml:"prompt_dir"`
+}
+
+// NewDefaultConfig returns a new Config with default values
+func NewDefaultConfig(promptDir string) *Config {
+	return &Config{
+		Provider:  "openai",
+		BaseURL:   "https://api.openai.com/v1",
+		Model:     "gpt-3.5-turbo",
+		Token:     "",
+		PromptDir: promptDir,
+	}
 }
 
 // Provider defines the interface for LLM providers
@@ -27,6 +38,13 @@ type Prompt struct {
 	User   string `toml:"user"`
 }
 
+// FormatPrompt formats the prompt with the given input message
+func (p *Prompt) FormatPrompt(input string) (string, string) {
+	systemPrompt := strings.ReplaceAll(p.System, "{{input}}", input)
+	userPrompt := strings.ReplaceAll(p.User, "{{input}}", input)
+	return systemPrompt, userPrompt
+}
+
 // LoadPrompt loads a prompt file and returns its contents
 func LoadPrompt(filePath string) (*Prompt, error) {
 	var prompt Prompt
@@ -34,11 +52,4 @@ func LoadPrompt(filePath string) (*Prompt, error) {
 		return nil, fmt.Errorf("error decoding prompt file: %v", err)
 	}
 	return &prompt, nil
-}
-
-// FormatPrompt formats the prompt with the given input message
-func (p *Prompt) FormatPrompt(input string) (string, string) {
-	systemPrompt := strings.ReplaceAll(p.System, "{{input}}", input)
-	userPrompt := strings.ReplaceAll(p.User, "{{input}}", input)
-	return systemPrompt, userPrompt
 }

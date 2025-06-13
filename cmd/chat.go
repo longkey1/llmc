@@ -55,7 +55,7 @@ user = "User prompt with optional {{input}} placeholder"`,
 		var llmProvider llmc.Provider
 		switch config.Provider {
 		case "openai":
-			llmProvider = openai.NewProvider(config)
+			llmProvider = openai.NewProvider(&config)
 		case "gemini":
 			llmProvider = gemini.NewProvider(config)
 		default:

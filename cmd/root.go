@@ -8,7 +8,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/longkey1/llmc/internal/openai"
+	"github.com/longkey1/llmc/internal/llmc"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -39,11 +39,8 @@ func Execute() {
 func init() {
 	cobra.OnInitialize(initConfig)
 
-	// Here you will define your flags and configuration settings.
-	// Cobra supports persistent flags, which, if defined here,
-	// will be global for your application.
-
-	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.llm.toml)")
+	// Global flags
+	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.config/llmc/config.toml)")
 
 	// Cobra also supports local flags, which will only run
 	// when this action is called directly.
@@ -60,20 +57,22 @@ func initConfig() {
 		home, err := os.UserHomeDir()
 		cobra.CheckErr(err)
 
-		// Search config in home directory with name ".llm" (without extension).
-		viper.AddConfigPath(home)
+		// Search config in config directory with name "config" (without extension).
+		configDir := filepath.Join(home, ".config", "llmc")
+		viper.AddConfigPath(configDir)
 		viper.SetConfigType("toml")
-		viper.SetConfigName(".llm")
+		viper.SetConfigName("config")
 	}
 
 	viper.AutomaticEnv() // read in environment variables that match
 
 	// Set default values
-	viper.SetDefault("provider", openai.ProviderName)
-	viper.SetDefault("base_url", openai.DefaultBaseURL)
-	viper.SetDefault("model", openai.DefaultModel)
-	viper.SetDefault("token", "")
-	viper.SetDefault("prompt_dir", filepath.Join(filepath.Dir(viper.ConfigFileUsed()), "prompts"))
+	defaultConfig := llmc.NewDefaultConfig(filepath.Join(filepath.Dir(viper.ConfigFileUsed()), "prompts"))
+	viper.SetDefault("provider", defaultConfig.Provider)
+	viper.SetDefault("base_url", defaultConfig.BaseURL)
+	viper.SetDefault("model", defaultConfig.Model)
+	viper.SetDefault("token", defaultConfig.Token)
+	viper.SetDefault("prompt_dir", defaultConfig.PromptDir)
 
 	// If a config file is found, read it in.
 	if err := viper.ReadInConfig(); err == nil {

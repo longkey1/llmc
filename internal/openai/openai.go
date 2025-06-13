@@ -13,7 +13,7 @@ import (
 const (
 	ProviderName   = "openai"
 	DefaultBaseURL = "https://api.openai.com/v1"
-	DefaultModel   = "gpt-3.5-turbo"
+	DefaultModel   = "gpt-4.1"
 )
 
 // OpenAIRequest represents the request body for OpenAI's chat completion API
@@ -30,11 +30,11 @@ type OpenAIMessage struct {
 
 // Provider implements the llmc.Provider interface for OpenAI
 type Provider struct {
-	config llmc.Config
+	config *llmc.Config
 }
 
 // NewProvider creates a new OpenAI provider instance
-func NewProvider(config llmc.Config) *Provider {
+func NewProvider(config *llmc.Config) *Provider {
 	return &Provider{
 		config: config,
 	}
