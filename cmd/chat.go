@@ -4,7 +4,6 @@ Copyright © 2025 NAME HERE <EMAIL ADDRESS>
 package cmd
 
 import (
-	"bufio"
 	"fmt"
 	"io"
 	"os"
@@ -89,13 +88,12 @@ user = "User prompt with optional {{input}} placeholder"`,
 			message = strings.Join(args, " ")
 		} else {
 			// Read from stdin
-			reader := bufio.NewReader(os.Stdin)
-			input, err := reader.ReadString('\n')
-			if err != nil && err != io.EOF {
-				fmt.Fprintf(os.Stderr, "Error reading from stdin: %v\n", err)
+			input, err := io.ReadAll(os.Stdin)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 				os.Exit(1)
 			}
-			message = strings.TrimSpace(input)
+			message = strings.TrimSpace(string(input))
 		}
 
 		// Format message with prompt and arguments
