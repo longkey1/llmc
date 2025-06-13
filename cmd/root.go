@@ -8,7 +8,9 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/longkey1/llmc/internal/gemini"
 	"github.com/longkey1/llmc/internal/llmc"
+	"github.com/longkey1/llmc/internal/openai"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -53,22 +55,34 @@ func init() {
 
 // initConfig reads in config file and ENV variables if set.
 func initConfig() {
+	viper.AutomaticEnv() // read in environment variables that match
+
+	// Determine config directory
+	configDir := ""
 	if cfgFile != "" {
 		// Use config file from the flag.
 		viper.SetConfigFile(cfgFile)
+		configDir = filepath.Dir(cfgFile)
 	} else {
 		// Find home directory.
 		home, err := os.UserHomeDir()
 		cobra.CheckErr(err)
 
 		// Search config in config directory with name "config" (without extension).
-		configDir := filepath.Join(home, ".config", "llmc")
+		configDir = filepath.Join(home, ".config", "llmc")
 		viper.AddConfigPath(configDir)
 		viper.SetConfigType("toml")
 		viper.SetConfigName("config")
 	}
 
-	viper.AutomaticEnv() // read in environment variables that match
+	// Create default config with prompts directory
+	defaultConfig := llmc.NewDefaultConfig(filepath.Join(configDir, "prompts"))
+
+	// Set default values from llmc package
+	viper.SetDefault("provider", defaultConfig.Provider)
+	viper.SetDefault("model", defaultConfig.Model)
+	viper.SetDefault("token", defaultConfig.Token)
+	viper.SetDefault("prompt_dir", defaultConfig.PromptDir)
 
 	// Read config file
 	if err := viper.ReadInConfig(); err != nil {
@@ -77,13 +91,16 @@ func initConfig() {
 		}
 	}
 
-	// Set default values
-	defaultConfig := llmc.NewDefaultConfig(filepath.Join(filepath.Dir(viper.ConfigFileUsed()), "prompts"))
-	viper.SetDefault("provider", defaultConfig.Provider)
-	viper.SetDefault("base_url", defaultConfig.BaseURL)
-	viper.SetDefault("model", defaultConfig.Model)
-	viper.SetDefault("token", defaultConfig.Token)
-	viper.SetDefault("prompt_dir", defaultConfig.PromptDir)
+	// Set provider-specific default base_url if not explicitly set in config
+	if !viper.InConfig("base_url") {
+		provider := viper.GetString("provider")
+		switch provider {
+		case gemini.ProviderName:
+			viper.Set("base_url", gemini.DefaultBaseURL)
+		case openai.ProviderName:
+			viper.Set("base_url", openai.DefaultBaseURL)
+		}
+	}
 
 	if verbose {
 		fmt.Fprintln(os.Stderr, "Using config file:", viper.ConfigFileUsed())

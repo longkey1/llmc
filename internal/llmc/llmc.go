@@ -6,22 +6,24 @@ import (
 	"strings"
 
 	"github.com/BurntSushi/toml"
+	"github.com/longkey1/llmc/internal/config"
 	"github.com/longkey1/llmc/internal/gemini"
 	"github.com/longkey1/llmc/internal/openai"
+	"github.com/spf13/viper"
 )
 
 // Config holds the configuration for the LLM provider
 type Config struct {
-	Provider  string `toml:"provider"`
-	BaseURL   string `toml:"base_url"`
-	Model     string `toml:"model"`
-	Token     string `toml:"token"`
-	PromptDir string `toml:"prompt_dir"`
+	Provider  string `toml:"provider" mapstructure:"provider"`
+	BaseURL   string `toml:"base_url" mapstructure:"base_url"`
+	Model     string `toml:"model" mapstructure:"model"`
+	Token     string `toml:"token" mapstructure:"token"`
+	PromptDir string `toml:"prompt_dir" mapstructure:"prompt_dir"`
 }
 
 // NewDefaultConfig returns a new Config with default values
-func NewDefaultConfig(promptDir string) *Config {
-	return &Config{
+func NewDefaultConfig(promptDir string) *config.Config {
+	return &config.Config{
 		Provider:  openai.ProviderName,
 		BaseURL:   openai.DefaultBaseURL,
 		Model:     openai.DefaultModel,
@@ -30,13 +32,22 @@ func NewDefaultConfig(promptDir string) *Config {
 	}
 }
 
+// LoadConfig loads configuration from viper
+func LoadConfig() (*config.Config, error) {
+	config := &config.Config{}
+	if err := viper.Unmarshal(config); err != nil {
+		return nil, fmt.Errorf("error unmarshaling config: %v", err)
+	}
+	return config, nil
+}
+
 // Provider defines the interface for LLM providers
 type Provider interface {
 	Chat(message string) (string, error)
 }
 
 // NewProvider creates a new provider instance based on the configuration
-func NewProvider(config *Config) (Provider, error) {
+func NewProvider(config *config.Config) (Provider, error) {
 	switch config.Provider {
 	case openai.ProviderName:
 		return openai.NewProvider(config), nil

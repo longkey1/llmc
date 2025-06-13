@@ -6,11 +6,13 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+
+	"github.com/longkey1/llmc/internal/config"
 )
 
 const (
 	ProviderName   = "gemini"
-	DefaultBaseURL = "https://generativelanguage.googleapis.com/v1"
+	DefaultBaseURL = "https://generativelanguage.googleapis.com/v1beta"
 	DefaultModel   = "gemini-pro"
 )
 
@@ -31,25 +33,13 @@ type GeminiPart struct {
 
 // Provider implements the llmc.Provider interface for Gemini
 type Provider struct {
-	config struct {
-		Provider  string
-		BaseURL   string
-		Model     string
-		Token     string
-		PromptDir string
-	}
+	config *config.Config
 }
 
 // NewProvider creates a new Gemini provider instance
-func NewProvider(config interface{}) *Provider {
+func NewProvider(config *config.Config) *Provider {
 	return &Provider{
-		config: config.(struct {
-			Provider  string
-			BaseURL   string
-			Model     string
-			Token     string
-			PromptDir string
-		}),
+		config: config,
 	}
 }
 
@@ -75,14 +65,18 @@ func (p *Provider) Chat(message string) (string, error) {
 	}
 
 	// Create HTTP request
-	req, err := http.NewRequest("POST", p.config.BaseURL+"/models/"+p.config.Model+":generateContent", bytes.NewBuffer(jsonData))
+	baseURL := p.config.BaseURL
+	if baseURL == "" {
+		baseURL = DefaultBaseURL
+	}
+	url := fmt.Sprintf("%s/models/%s:generateContent?key=%s", baseURL, p.config.Model, p.config.Token)
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonData))
 	if err != nil {
 		return "", fmt.Errorf("error creating request: %v", err)
 	}
 
 	// Set headers
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("x-goog-api-key", p.config.Token)
 
 	// Send request
 	client := &http.Client{}

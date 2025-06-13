@@ -39,13 +39,31 @@ The prompt file should be in TOML format with the following structure:
 system = "System prompt with optional {{input}} placeholder"
 user = "User prompt with optional {{input}} placeholder"`,
 	Run: func(cmd *cobra.Command, args []string) {
-		// Load configuration
-		config := &llmc.Config{
-			Provider:  provider,
-			Model:     model,
-			BaseURL:   baseURL,
-			Token:     viper.GetString("token"),
-			PromptDir: viper.GetString("prompt_dir"),
+		// Load configuration from file
+		config, err := llmc.LoadConfig()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)
+			os.Exit(1)
+		}
+
+		// Override with command line flags if provided
+		if provider != "" {
+			config.Provider = provider
+		}
+		if model != "" {
+			config.Model = model
+		}
+		if baseURL != "" {
+			config.BaseURL = baseURL
+		}
+
+		// Debug output
+		if verbose {
+			fmt.Fprintf(os.Stderr, "Provider: %s\n", config.Provider)
+			fmt.Fprintf(os.Stderr, "Model: %s\n", config.Model)
+			fmt.Fprintf(os.Stderr, "Base URL: %s\n", config.BaseURL)
+			fmt.Fprintf(os.Stderr, "Token: %s\n", config.Token)
+			fmt.Fprintf(os.Stderr, "Prompt dir: %s\n", config.PromptDir)
 		}
 
 		// Select provider
