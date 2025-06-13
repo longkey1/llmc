@@ -20,7 +20,7 @@ var rootCmd = &cobra.Command{
 	Use:   "llmc",
 	Short: "A CLI tool for interacting with LLM APIs",
 	Long: `llmc is a command-line tool that allows you to interact with various LLM APIs.
-It supports multiple providers like OpenAI and Google's Gemini.
+It supports multiple providers.
 You can configure the tool using a TOML configuration file.`,
 	// Uncomment the following line if your bare application
 	// has an action associated with it:

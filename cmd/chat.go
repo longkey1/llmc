@@ -29,7 +29,10 @@ var (
 var chatCmd = &cobra.Command{
 	Use:   "chat [message]",
 	Short: "Send a message to the LLM",
-	Long: `Send a message to the LLM and print the response.
+	Long: `Send a single message to the LLM and print the response.
+This command performs a one-time API call to the specified LLM provider.
+It does not maintain conversation history or provide interactive chat functionality.
+
 If no message is provided as an argument, it reads from stdin.
 
 You can specify the provider, model, base URL, and prompt using flags.
@@ -51,9 +54,9 @@ user = "User prompt with optional {{input}} placeholder"`,
 		// Select provider
 		var llmProvider llmc.Provider
 		switch config.Provider {
-		case openai.ProviderName:
+		case "openai":
 			llmProvider = openai.NewProvider(config)
-		case gemini.ProviderName:
+		case "gemini":
 			llmProvider = gemini.NewProvider(config)
 		default:
 			fmt.Fprintf(os.Stderr, "Unsupported provider: %s\n", config.Provider)
