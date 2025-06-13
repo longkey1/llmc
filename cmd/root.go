@@ -70,6 +70,13 @@ func initConfig() {
 
 	viper.AutomaticEnv() // read in environment variables that match
 
+	// Read config file
+	if err := viper.ReadInConfig(); err != nil {
+		if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
+			fmt.Fprintf(os.Stderr, "Error reading config file: %v\n", err)
+		}
+	}
+
 	// Set default values
 	defaultConfig := llmc.NewDefaultConfig(filepath.Join(filepath.Dir(viper.ConfigFileUsed()), "prompts"))
 	viper.SetDefault("provider", defaultConfig.Provider)
@@ -78,10 +85,7 @@ func initConfig() {
 	viper.SetDefault("token", defaultConfig.Token)
 	viper.SetDefault("prompt_dir", defaultConfig.PromptDir)
 
-	// If a config file is found, read it in.
-	if err := viper.ReadInConfig(); err == nil {
-		if verbose {
-			fmt.Fprintln(os.Stderr, "Using config file:", viper.ConfigFileUsed())
-		}
+	if verbose {
+		fmt.Fprintln(os.Stderr, "Using config file:", viper.ConfigFileUsed())
 	}
 }
