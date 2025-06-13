@@ -11,7 +11,7 @@ import (
 const (
 	ProviderName   = "openai"
 	DefaultBaseURL = "https://api.openai.com/v1"
-	DefaultModel   = "gpt-3.5-turbo"
+	DefaultModel   = "gpt-4.1"
 )
 
 // OpenAIRequest represents the request body for OpenAI's chat completion API

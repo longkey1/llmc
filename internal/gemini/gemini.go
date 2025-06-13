@@ -11,7 +11,7 @@ import (
 const (
 	ProviderName   = "gemini"
 	DefaultBaseURL = "https://generativelanguage.googleapis.com/v1beta"
-	DefaultModel   = "gemini-pro"
+	DefaultModel   = "gemini-2.0-flash"
 )
 
 // GeminiRequest represents the request body for Gemini's generate content API
