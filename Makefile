@@ -53,7 +53,7 @@ release: ## Release target with type argument. Usage: make release type=patch|mi
 		if [ "$(dryrun)" = "false" ]; then \
 			echo "Creating new tag $$NEXT_VERSION..."; \
 			git push origin master --no-verify --force-with-lease; \
-			git tag -a $$NEXT_VERSION -m "Release $$NEXT_VERSION"; \
+			git tag -a $$NEXT_VERSION -m "Release of $$NEXT_VERSION"; \
 			git push origin $$NEXT_VERSION --no-verify --force-with-lease; \
 			echo "Tag $$NEXT_VERSION has been created and pushed"; \
 		else \
@@ -90,10 +90,11 @@ rerelease: ## Rerelease target with tag argument. Usage: make rerelease tag=<tag
 		echo "Deleting local tag..."; \
 		git tag -d "$$TAG"; \
 		echo "Deleting remote tag..."; \
-		git push origin ":refs/tags/$$TAG"; \
+		git push origin ":refs/tags/$$TAG" --no-verify --force-with-lease; \
 		echo "Recreating tag on HEAD..."; \
-		git tag "$$TAG"; \
-		git push origin "$$TAG"; \
+		git tag -a "$$TAG" -m "Release of $$TAG"; \
+		echo "Pushing tag to origin..."; \
+		git push origin "$$TAG" --no-verify --force-with-lease; \
 		echo "Recreating GitHub release..."; \
 		gh release create "$$TAG" --title "$$TAG" --notes "Re-release of $$TAG"; \
 		echo "Done!"; \
@@ -101,9 +102,9 @@ rerelease: ## Rerelease target with tag argument. Usage: make rerelease tag=<tag
 		echo "[DRY RUN] Showing what would be done..."; \
 		echo "Would delete release: $$TAG"; \
 		echo "Would delete local tag: $$TAG"; \
-		echo "Would delete remote tag: $$TAG"; \
-		echo "Would create new tag at HEAD: $$TAG"; \
-		echo "Would push tag to origin: $$TAG"; \
+		echo "Would delete remote tag: $$TAG (with options: --no-verify --force-with-lease)"; \
+		echo "Would create new tag at HEAD: $$TAG (with options: -a)"; \
+		echo "Would push tag to origin: $$TAG (with options: --no-verify --force-with-lease)"; \
 		echo "Would create new release for: $$TAG"; \
 		echo "Dry run complete."; \
 	fi
