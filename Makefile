@@ -52,6 +52,48 @@ release: ## Release target with type argument. Usage: make release type=patch|mi
 		exit 1; \
 	fi
 
+.PHONY: rerelease
+
+# Variables for rerelease target
+dryrun ?= true
+tag ?=
+
+rerelease: ## Rerelease target with tag argument. Usage: make rerelease tag=<tag> dryrun=false
+	@TAG="$(tag)"; \
+	if [ -z "$$TAG" ]; then \
+		TAG=$$(git describe --tags --abbrev=0); \
+	fi; \
+	if [ -z "$$TAG" ]; then \
+		echo "Error: No tag found near HEAD and no tag specified."; \
+		exit 1; \
+	fi; \
+	echo "Target tag: $$TAG"; \
+	if [ "$(dryrun)" = "false" ]; then \
+		echo "Deleting GitHub release..."; \
+		gh release delete "$$TAG" -y; \
+		echo "Deleting local tag..."; \
+		git tag -d "$$TAG"; \
+		echo "Deleting remote tag..."; \
+		git push origin ":refs/tags/$$TAG"; \
+		echo "Recreating tag on HEAD..."; \
+		git tag "$$TAG"; \
+		git push origin "$$TAG"; \
+		echo "Recreating GitHub release..."; \
+		gh release create "$$TAG" --title "$$TAG" --notes "Re-release of $$TAG"; \
+		echo "Done!"; \
+	else \
+		echo "[DRY RUN] Showing what would be done..."; \
+		echo "Would delete release: $$TAG"; \
+		echo "Would delete local tag: $$TAG"; \
+		echo "Would delete remote tag: $$TAG"; \
+		echo "Would create new tag at HEAD: $$TAG"; \
+		echo "Would push tag to origin: $$TAG"; \
+		echo "Would create new release for: $$TAG"; \
+		echo "Dry run complete."; \
+	fi
+
 .PHONY: help
 help:
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}'
+
+
