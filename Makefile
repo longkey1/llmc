@@ -95,7 +95,7 @@ re-release: ## Rerelease target with tag argument. Usage: make re-release tag=<t
 		echo "Deleting remote tag..."; \
 		git push origin ":refs/tags/$$TAG" --no-verify --force; \
 		echo "Recreating tag on HEAD..."; \
-		git tag -a "$$TAG" -m "Release of $$TAG"; \
+		git tag -a "$$TAG" -m "Release $$TAG"; \
 		echo "Pushing tag to origin..."; \
 		git push origin "$$TAG" --no-verify --force-with-lease; \
 		echo "Recreating GitHub release..."; \
