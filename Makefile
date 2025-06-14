@@ -71,13 +71,13 @@ release: ## Release target with type argument. Usage: make release type=patch|mi
 		exit 1; \
 	fi
 
-.PHONY: rerelease
+.PHONY: re-release
 
-# Variables for rerelease target
+# Variables for re-release target
 dryrun ?= true
 tag ?=
 
-rerelease: ## Rerelease target with tag argument. Usage: make rerelease tag=<tag> dryrun=false
+re-release: ## Rerelease target with tag argument. Usage: make re-release tag=<tag> dryrun=false
 	@TAG="$(tag)"; \
 	if [ -z "$$TAG" ]; then \
 		TAG=$$(git describe --tags --abbrev=0); \
@@ -93,7 +93,7 @@ rerelease: ## Rerelease target with tag argument. Usage: make rerelease tag=<tag
 		echo "Deleting local tag..."; \
 		git tag -d "$$TAG"; \
 		echo "Deleting remote tag..."; \
-		git push origin ":refs/tags/$$TAG" --no-verify --force-with-lease; \
+		git push origin ":refs/tags/$$TAG" --no-verify --force; \
 		echo "Recreating tag on HEAD..."; \
 		git tag -a "$$TAG" -m "Release of $$TAG"; \
 		echo "Pushing tag to origin..."; \
@@ -110,11 +110,11 @@ rerelease: ## Rerelease target with tag argument. Usage: make rerelease tag=<tag
 		echo "Would push tag to origin: $$TAG"; \
 		echo "Would create new release for: $$TAG"; \
 		echo ""; \
-		echo "To execute this rerelease, run:"; \
+		echo "To execute this re-release, run:"; \
 		if [ -n "$(tag)" ]; then \
-			echo "  make rerelease tag=$$TAG dryrun=false"; \
+			echo "  make re-release tag=$$TAG dryrun=false"; \
 		else \
-			echo "  make rerelease dryrun=false"; \
+			echo "  make re-release dryrun=false"; \
 		fi; \
 		echo "Dry run complete."; \
 	fi
