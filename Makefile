@@ -61,6 +61,9 @@ release: ## Release target with type argument. Usage: make release type=patch|mi
 			echo "Would push to origin/master"; \
 			echo "Would create tag: $$NEXT_VERSION"; \
 			echo "Would push tag to origin: $$NEXT_VERSION"; \
+			echo ""; \
+			echo "To execute this release, run:"; \
+			echo "  make release type=$(type) dryrun=false"; \
 			echo "Dry run complete."; \
 		fi \
 	else \
@@ -102,10 +105,17 @@ rerelease: ## Rerelease target with tag argument. Usage: make rerelease tag=<tag
 		echo "[DRY RUN] Showing what would be done..."; \
 		echo "Would delete release: $$TAG"; \
 		echo "Would delete local tag: $$TAG"; \
-		echo "Would delete remote tag: $$TAG (with options: --no-verify --force-with-lease)"; \
-		echo "Would create new tag at HEAD: $$TAG (with options: -a)"; \
-		echo "Would push tag to origin: $$TAG (with options: --no-verify --force-with-lease)"; \
+		echo "Would delete remote tag: $$TAG"; \
+		echo "Would create new tag at HEAD: $$TAG"; \
+		echo "Would push tag to origin: $$TAG"; \
 		echo "Would create new release for: $$TAG"; \
+		echo ""; \
+		echo "To execute this rerelease, run:"; \
+		if [ -n "$(tag)" ]; then \
+			echo "  make rerelease tag=$$TAG dryrun=false"; \
+		else \
+			echo "  make rerelease dryrun=false"; \
+		fi; \
 		echo "Dry run complete."; \
 	fi
 
