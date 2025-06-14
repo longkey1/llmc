@@ -17,8 +17,6 @@ builds:
       - "6"  # For Raspberry Pi 1, 2
       - "7"  # For Raspberry Pi 3, 4, 5 (32-bit)
     ignore:
-      - goos: windows
-        goarch: arm64
       - goos: darwin
         goarch: 386
       - goos: windows
