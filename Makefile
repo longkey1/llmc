@@ -45,7 +45,7 @@ release: ## Release target with type argument. Usage: make release type=patch|mi
 		echo "  dryrun - Set to false to actually create and push the tag (default: true)"; \
 		echo ""; \
 		echo "Current version: $(VERSION)"; \
-		exit 1; \
+		exit 0; \
 	elif [ "$(type)" = "patch" ] || [ "$(type)" = "minor" ] || [ "$(type)" = "major" ]; then \
 		NEXT_VERSION=$(call next_version,$(type)); \
 		echo "Current version: $(VERSION)"; \
