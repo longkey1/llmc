@@ -21,9 +21,9 @@ builds:
         goarch: arm64
       - goos: darwin
         goarch: 386
-      - goos: linux
-        goarch: arm64
-        goarm: "6"  # Invalid combination of arm64 and armv6
+      - goos: windows
+        goarch: arm
+        goarm: "6"
 
 archives:
   - format: tar.gz
