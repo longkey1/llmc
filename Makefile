@@ -15,7 +15,7 @@ build: ## Build the project
 .PHONY: release
 
 # Get current version from git tag
-VERSION := $(shell git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+VERSION := $(shell git tag --sort=-v:refname | head -n1 2>/dev/null || echo "v0.0.0")
 MAJOR := $(shell echo $(VERSION) | cut -d. -f1 | tr -d 'v')
 MINOR := $(shell echo $(VERSION) | cut -d. -f2)
 PATCH := $(shell echo $(VERSION) | cut -d. -f3)
@@ -28,25 +28,41 @@ $(if $(filter major,$1),v$(shell expr $(MAJOR) + 1).0.0,\
 v$(MAJOR).$(MINOR).$(shell expr $(PATCH) + 1))))
 endef
 
-release: ## Release target with type argument. Usage: make release type=patch|minor|major (default: patch)
+# Variables for release target
+dryrun ?= true
+type ?=
+
+release: ## Release target with type argument. Usage: make release type=patch|minor|major dryrun=false
 	@if [ "$(type)" = "" ]; then \
-		echo "Usage: make release type=<type>"; \
+		echo "Usage: make release type=<type> [dryrun=false]"; \
 		echo ""; \
 		echo "Types:"; \
 		echo "  patch  - Increment patch version (e.g., v1.2.3 -> v1.2.4)"; \
 		echo "  minor  - Increment minor version (e.g., v1.2.3 -> v1.3.0)"; \
 		echo "  major  - Increment major version (e.g., v1.2.3 -> v2.0.0)"; \
 		echo ""; \
+		echo "Options:"; \
+		echo "  dryrun - Set to false to actually create and push the tag (default: true)"; \
+		echo ""; \
 		echo "Current version: $(VERSION)"; \
 		exit 1; \
 	elif [ "$(type)" = "patch" ] || [ "$(type)" = "minor" ] || [ "$(type)" = "major" ]; then \
+		NEXT_VERSION=$(call next_version,$(type)); \
 		echo "Current version: $(VERSION)"; \
-		echo "Next version: $(call next_version,$(type))"; \
-		echo "Creating new tag $(call next_version,$(type))..."; \
-		git push origin master --no-verify --force-with-lease; \
-		git tag -a $(call next_version,$(type)) -m "Release $(call next_version,$(type))"; \
-		git push origin $(call next_version,$(type)) --no-verify --force-with-lease; \
-		echo "Tag $(call next_version,$(type)) has been created and pushed"; \
+		echo "Next version: $$NEXT_VERSION"; \
+		if [ "$(dryrun)" = "false" ]; then \
+			echo "Creating new tag $$NEXT_VERSION..."; \
+			git push origin master --no-verify --force-with-lease; \
+			git tag -a $$NEXT_VERSION -m "Release $$NEXT_VERSION"; \
+			git push origin $$NEXT_VERSION --no-verify --force-with-lease; \
+			echo "Tag $$NEXT_VERSION has been created and pushed"; \
+		else \
+			echo "[DRY RUN] Showing what would be done..."; \
+			echo "Would push to origin/master"; \
+			echo "Would create tag: $$NEXT_VERSION"; \
+			echo "Would push tag to origin: $$NEXT_VERSION"; \
+			echo "Dry run complete."; \
+		fi \
 	else \
 		echo "Error: Invalid release type. Use 'patch', 'minor', or 'major'"; \
 		exit 1; \
