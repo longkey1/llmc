@@ -1,4 +1,5 @@
 /.devcontainer/devcontainer.json
+/llmc
 
 # Binaries for programs and plugins
 *.exe

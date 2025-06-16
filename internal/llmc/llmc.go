@@ -100,7 +100,7 @@ func FormatMessage(message string, promptName string, promptDirs []string, args 
 		promptFile = promptFile + ".toml"
 	}
 
-	// Search for prompt file in all directories
+	// Search for prompt file in all directories (including subdirectories)
 	var promptPath string
 	var found bool
 	for _, promptDir := range promptDirs {
