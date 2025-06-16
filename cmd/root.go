@@ -55,7 +55,9 @@ func init() {
 
 // initConfig reads in config file and ENV variables if set.
 func initConfig() {
-	viper.AutomaticEnv() // read in environment variables that match
+	// Set environment variable prefix and automatic env
+	viper.SetEnvPrefix("LLMC") // Set prefix for environment variables
+	viper.AutomaticEnv()       // read in environment variables that match
 
 	// Determine config directory
 	configDir := ""
@@ -91,8 +93,8 @@ func initConfig() {
 		}
 	}
 
-	// Set provider-specific default base_url if not explicitly set in config
-	if !viper.InConfig("base_url") {
+	// Dynamically set base_url based on provider if not explicitly set
+	if viper.GetString("base_url") == "" {
 		provider := viper.GetString("provider")
 		switch provider {
 		case gemini.ProviderName:
@@ -104,5 +106,10 @@ func initConfig() {
 
 	if verbose {
 		fmt.Fprintln(os.Stderr, "Using config file:", viper.ConfigFileUsed())
+		fmt.Fprintln(os.Stderr, "Environment variables:")
+		fmt.Fprintln(os.Stderr, "  LLMC_PROVIDER:", viper.GetString("provider"))
+		fmt.Fprintln(os.Stderr, "  LLMC_MODEL:", viper.GetString("model"))
+		fmt.Fprintln(os.Stderr, "  LLMC_BASE_URL:", viper.GetString("base_url"))
+		fmt.Fprintln(os.Stderr, "  LLMC_PROMPT_DIR:", viper.GetString("prompt_dir"))
 	}
 }
