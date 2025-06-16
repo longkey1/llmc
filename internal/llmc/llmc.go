@@ -2,6 +2,7 @@ package llmc
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -13,11 +14,11 @@ import (
 
 // Config holds the configuration for the LLM provider
 type Config struct {
-	Provider  string `toml:"provider" mapstructure:"provider"`
-	BaseURL   string `toml:"base_url" mapstructure:"base_url"`
-	Model     string `toml:"model" mapstructure:"model"`
-	Token     string `toml:"token" mapstructure:"token"`
-	PromptDir string `toml:"prompt_dir" mapstructure:"prompt_dir"`
+	Provider   string   `toml:"provider" mapstructure:"provider"`
+	BaseURL    string   `toml:"base_url" mapstructure:"base_url"`
+	Model      string   `toml:"model" mapstructure:"model"`
+	Token      string   `toml:"token" mapstructure:"token"`
+	PromptDirs []string `toml:"prompt_dirs" mapstructure:"prompt_dirs"`
 }
 
 // GetModel returns the model name
@@ -38,11 +39,11 @@ func (c *Config) GetToken() string {
 // NewDefaultConfig returns a new Config with default values
 func NewDefaultConfig(promptDir string) *Config {
 	return &Config{
-		Provider:  openai.ProviderName,
-		BaseURL:   openai.DefaultBaseURL,
-		Model:     openai.DefaultModel,
-		Token:     "",
-		PromptDir: promptDir,
+		Provider:   openai.ProviderName,
+		BaseURL:    openai.DefaultBaseURL,
+		Model:      openai.DefaultModel,
+		Token:      "",
+		PromptDirs: []string{promptDir},
 	}
 }
 
@@ -88,7 +89,7 @@ func LoadPrompt(filePath string) (*Prompt, error) {
 }
 
 // FormatMessage formats the message with prompt if specified
-func FormatMessage(message string, promptName string, promptDir string, args []string) (string, error) {
+func FormatMessage(message string, promptName string, promptDirs []string, args []string) (string, error) {
 	if promptName == "" {
 		return message, nil
 	}
@@ -99,8 +100,21 @@ func FormatMessage(message string, promptName string, promptDir string, args []s
 		promptFile = promptFile + ".toml"
 	}
 
-	// Construct full path to prompt file
-	promptPath := filepath.Join(promptDir, promptFile)
+	// Search for prompt file in all directories
+	var promptPath string
+	var found bool
+	for _, promptDir := range promptDirs {
+		candidatePath := filepath.Join(promptDir, promptFile)
+		if _, err := os.Stat(candidatePath); err == nil {
+			promptPath = candidatePath
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		return "", fmt.Errorf("prompt file '%s' not found in any of the prompt directories: %v", promptFile, promptDirs)
+	}
 
 	// Load prompt template
 	promptTemplate, err := LoadPrompt(promptPath)

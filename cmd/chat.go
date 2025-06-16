@@ -66,7 +66,7 @@ user = "User prompt with optional {{input}} placeholder"`,
 			fmt.Fprintf(os.Stderr, "Model: %s\n", config.Model)
 			fmt.Fprintf(os.Stderr, "Base URL: %s\n", config.BaseURL)
 			fmt.Fprintf(os.Stderr, "Token: %s\n", config.Token)
-			fmt.Fprintf(os.Stderr, "Prompt dir: %s\n", config.PromptDir)
+			fmt.Fprintf(os.Stderr, "Prompt dirs: %v\n", config.PromptDirs)
 		}
 
 		// Select provider
@@ -97,7 +97,7 @@ user = "User prompt with optional {{input}} placeholder"`,
 		}
 
 		// Format message with prompt and arguments
-		formattedMessage, err := llmc.FormatMessage(message, prompt, config.PromptDir, argFlags)
+		formattedMessage, err := llmc.FormatMessage(message, prompt, config.PromptDirs, argFlags)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)

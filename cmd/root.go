@@ -84,7 +84,7 @@ func initConfig() {
 	viper.SetDefault("provider", defaultConfig.Provider)
 	viper.SetDefault("model", defaultConfig.Model)
 	viper.SetDefault("token", defaultConfig.Token)
-	viper.SetDefault("prompt_dir", defaultConfig.PromptDir)
+	viper.SetDefault("prompt_dirs", defaultConfig.PromptDirs)
 
 	// Read config file
 	if err := viper.ReadInConfig(); err != nil {
@@ -110,6 +110,6 @@ func initConfig() {
 		fmt.Fprintln(os.Stderr, "  LLMC_PROVIDER:", viper.GetString("provider"))
 		fmt.Fprintln(os.Stderr, "  LLMC_MODEL:", viper.GetString("model"))
 		fmt.Fprintln(os.Stderr, "  LLMC_BASE_URL:", viper.GetString("base_url"))
-		fmt.Fprintln(os.Stderr, "  LLMC_PROMPT_DIR:", viper.GetString("prompt_dir"))
+		fmt.Fprintln(os.Stderr, "  LLMC_PROMPT_DIRS:", viper.GetStringSlice("prompt_dirs"))
 	}
 }

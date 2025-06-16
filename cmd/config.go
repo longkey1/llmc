@@ -29,7 +29,7 @@ This command shows all configuration values loaded from the config file and envi
 		fmt.Printf("BaseURL: %s\n", config.BaseURL)
 		fmt.Printf("Model: %s\n", config.Model)
 		fmt.Printf("Token: %s\n", maskToken(config.Token))
-		fmt.Printf("PromptDirectory: %s\n", config.PromptDir)
+		fmt.Printf("PromptDirectories: %v\n", config.PromptDirs)
 	},
 }
 

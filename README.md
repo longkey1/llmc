@@ -34,7 +34,7 @@ provider = "openai"  # or "gemini"
 base_url = "https://api.openai.com/v1"  # or Gemini's API URL
 model = "gpt-3.5-turbo"  # or "gemini-pro"
 token = "your-api-token"
-prompt_dir = "/path/to/prompts"
+prompt_dirs = ["/path/to/prompts", "/another/prompt/directory"]  # Multiple directories supported
 ```
 
 ## Usage
@@ -59,6 +59,8 @@ Create a prompt file (e.g., `$HOME/.config/llmc/prompts/example.toml`):
 system = "You are a helpful assistant. {{input}}"
 user = "Please help me with: {{input}}"
 ```
+
+You can also create prompt files in multiple directories. The tool will search for prompt files in all configured directories in the order they are specified in the configuration.
 
 Use the prompt:
 ```bash
