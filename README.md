@@ -14,6 +14,8 @@ go install github.com/longkey1/llmc@latest
 
 ## Configuration
 
+### Method 1: Configuration File (Recommended)
+
 1. Initialize the configuration:
 ```bash
 llmc init
@@ -36,6 +38,39 @@ model = "gpt-3.5-turbo"  # or "gemini-pro"
 token = "your-api-token"
 prompt_dirs = ["/path/to/prompts", "/another/prompt/directory"]  # Multiple directories supported
 ```
+
+### Method 2: Environment Variables
+
+You can also configure the tool using environment variables. Environment variables take precedence over configuration file settings.
+
+```bash
+# Set provider (openai or gemini)
+export LLMC_PROVIDER="openai"
+
+# Set API base URL
+export LLMC_BASE_URL="https://api.openai.com/v1"
+
+# Set model name
+export LLMC_MODEL="gpt-3.5-turbo"
+
+# Set API token
+export LLMC_TOKEN="your-api-token"
+
+# Set prompt directories (comma-separated)
+export LLMC_PROMPT_DIRS="/path/to/prompts,/another/prompt/directory"
+```
+
+You can add these to your shell profile (e.g., `~/.bashrc`, `~/.zshrc`) to make them persistent:
+
+```bash
+# Add to your shell profile
+echo 'export LLMC_PROVIDER="openai"' >> ~/.bashrc
+echo 'export LLMC_TOKEN="your-api-token"' >> ~/.bashrc
+echo 'export LLMC_MODEL="gpt-3.5-turbo"' >> ~/.bashrc
+source ~/.bashrc
+```
+
+**Note**: Environment variables override configuration file settings. If both are set, the environment variable value will be used.
 
 ## Usage
 
@@ -149,7 +184,3 @@ Enable verbose output with the `-v` flag:
 ```bash
 llmc chat -v "Hello"
 ```
-
-## License
-
-[License information here]
