@@ -50,16 +50,23 @@ If you want to see which directory each prompt comes from, use the --with-dir op
 		promptMap := make(map[string]string) // prompt name -> directory path
 
 		for _, promptDir := range config.PromptDirs {
+			// Convert relative path to absolute path if needed
+			absPromptDir, err := llmc.ResolvePath(promptDir)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error resolving path %s: %v\n", promptDir, err)
+				continue
+			}
+
 			// Check if directory exists
-			if _, err := os.Stat(promptDir); os.IsNotExist(err) {
+			if _, err := os.Stat(absPromptDir); os.IsNotExist(err) {
 				if verbose {
-					fmt.Fprintf(os.Stderr, "Prompt directory does not exist: %s\n", promptDir)
+					fmt.Fprintf(os.Stderr, "Prompt directory does not exist: %s (resolved from %s)\n", absPromptDir, promptDir)
 				}
 				continue
 			}
 
 			// Recursively find all .toml files
-			err := filepath.Walk(promptDir, func(path string, info os.FileInfo, err error) error {
+			err = filepath.Walk(absPromptDir, func(path string, info os.FileInfo, err error) error {
 				if err != nil {
 					return err
 				}
@@ -75,7 +82,7 @@ If you want to see which directory each prompt comes from, use the --with-dir op
 				}
 
 				// Calculate relative path from prompt directory
-				relPath, err := filepath.Rel(promptDir, path)
+				relPath, err := filepath.Rel(absPromptDir, path)
 				if err != nil {
 					if verbose {
 						fmt.Fprintf(os.Stderr, "Error calculating relative path for %s: %v\n", path, err)
@@ -93,10 +100,10 @@ If you want to see which directory each prompt comes from, use the --with-dir op
 				if existingDir, exists := promptMap[promptName]; exists {
 					if verbose {
 						fmt.Fprintf(os.Stderr, "Warning: Prompt '%s' found in multiple directories: %s and %s\n",
-							promptName, existingDir, promptDir)
+							promptName, existingDir, absPromptDir)
 					}
 				} else {
-					promptMap[promptName] = promptDir
+					promptMap[promptName] = absPromptDir
 					allPrompts = append(allPrompts, promptName)
 				}
 
@@ -104,7 +111,7 @@ If you want to see which directory each prompt comes from, use the --with-dir op
 			})
 
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "Error walking prompt directory %s: %v\n", promptDir, err)
+				fmt.Fprintf(os.Stderr, "Error walking prompt directory %s: %v\n", absPromptDir, err)
 				continue
 			}
 		}
@@ -117,6 +124,7 @@ If you want to see which directory each prompt comes from, use the --with-dir op
 			fmt.Println("No prompt templates found.")
 			fmt.Println("Create .toml files in the following directories:")
 			for _, promptDir := range config.PromptDirs {
+				// Show the original path (relative or absolute) in the message
 				fmt.Printf("  - %s\n", promptDir)
 			}
 			return

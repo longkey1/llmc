@@ -56,6 +56,21 @@ func LoadConfig() (*Config, error) {
 	return config, nil
 }
 
+// ResolvePath converts a relative path to absolute path if needed
+func ResolvePath(path string) (string, error) {
+	if filepath.IsAbs(path) {
+		return path, nil
+	}
+
+	// Get current working directory
+	cwd, err := os.Getwd()
+	if err != nil {
+		return "", fmt.Errorf("error getting current working directory: %v", err)
+	}
+
+	return filepath.Join(cwd, path), nil
+}
+
 // Provider defines the interface for LLM providers
 type Provider interface {
 	Chat(message string) (string, error)
@@ -104,7 +119,13 @@ func FormatMessage(message string, promptName string, promptDirs []string, args 
 	var promptPath string
 	var found bool
 	for _, promptDir := range promptDirs {
-		candidatePath := filepath.Join(promptDir, promptFile)
+		// Convert relative path to absolute path if needed
+		absPromptDir, err := ResolvePath(promptDir)
+		if err != nil {
+			return "", err
+		}
+
+		candidatePath := filepath.Join(absPromptDir, promptFile)
 		if _, err := os.Stat(candidatePath); err == nil {
 			promptPath = candidatePath
 			found = true
