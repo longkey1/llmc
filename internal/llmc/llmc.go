@@ -62,13 +62,20 @@ func ResolvePath(path string) (string, error) {
 		return path, nil
 	}
 
-	// Get current working directory
-	cwd, err := os.Getwd()
-	if err != nil {
-		return "", fmt.Errorf("error getting current working directory: %v", err)
+	// Get config file directory as base directory
+	configFile := viper.ConfigFileUsed()
+	if configFile == "" {
+		// If no config file is used, fall back to current working directory
+		cwd, err := os.Getwd()
+		if err != nil {
+			return "", fmt.Errorf("error getting current working directory: %v", err)
+		}
+		return filepath.Join(cwd, path), nil
 	}
 
-	return filepath.Join(cwd, path), nil
+	// Use config file directory as base
+	configDir := filepath.Dir(configFile)
+	return filepath.Join(configDir, path), nil
 }
 
 // Provider defines the interface for LLM providers
