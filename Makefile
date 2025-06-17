@@ -47,7 +47,13 @@ release: ## Release target with type argument. Usage: make release type=patch|mi
 		echo "Current version: $(VERSION)"; \
 		exit 0; \
 	elif [ "$(type)" = "patch" ] || [ "$(type)" = "minor" ] || [ "$(type)" = "major" ]; then \
-		NEXT_VERSION=$(call next_version,$(type)); \
+		NEXT_VERSION=$$(if [ "$(type)" = "patch" ]; then \
+			echo "v$(MAJOR).$(MINOR).$$(expr $(PATCH) + 1)"; \
+		elif [ "$(type)" = "minor" ]; then \
+			echo "v$(MAJOR).$$(expr $(MINOR) + 1).0"; \
+		elif [ "$(type)" = "major" ]; then \
+			echo "v$$(expr $(MAJOR) + 1).0.0"; \
+		fi); \
 		echo "Current version: $(VERSION)"; \
 		echo "Next version: $$NEXT_VERSION"; \
 		if [ "$(dryrun)" = "false" ]; then \
