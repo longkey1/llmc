@@ -10,7 +10,19 @@ init: ## Initialize the project
 .PHONY: build
 build: ## Build the project
 	go mod tidy
-	go mod vendor
+	go work vendor
+	$(eval VERSION := $(shell git tag --sort=-v:refname | head -n1 2>/dev/null || echo "v0.0.0"))
+	$(eval COMMIT_SHA := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown"))
+	$(eval BUILD_TIME := $(shell date -u '+%Y-%m-%dT%H:%M:%SZ'))
+	go build -ldflags '-X github.com/longkey1/llmc/internal/version.Version=$(VERSION) -X github.com/longkey1/llmc/internal/version.CommitSHA=$(COMMIT_SHA) -X github.com/longkey1/llmc/internal/version.BuildTime=$(BUILD_TIME)' -o llmc
+
+.PHONY: build-release
+build-release: ## Build the project for release with version information
+	$(eval VERSION := $(shell git tag --sort=-v:refname | head -n1 2>/dev/null || echo "v0.0.0"))
+	$(eval COMMIT_SHA := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown"))
+	$(eval BUILD_TIME := $(shell date -u '+%Y-%m-%dT%H:%M:%SZ'))
+	go build -ldflags '-X github.com/longkey1/llmc/internal/version.Version=$(VERSION) -X github.com/longkey1/llmc/internal/version.CommitSHA=$(COMMIT_SHA) -X github.com/longkey1/llmc/internal/version.BuildTime=$(BUILD_TIME)' -o llmc
+	@echo "Built version: $(VERSION) (commit: $(COMMIT_SHA))"
 
 .PHONY: release
 
@@ -62,6 +74,8 @@ release: ## Release target with type argument. Usage: make release type=patch|mi
 			git tag -a $$NEXT_VERSION -m "Release of $$NEXT_VERSION"; \
 			git push origin $$NEXT_VERSION --no-verify --force-with-lease; \
 			echo "Tag $$NEXT_VERSION has been created and pushed"; \
+			echo "Building release binary..."; \
+			$(MAKE) build-release; \
 		else \
 			echo "[DRY RUN] Showing what would be done..."; \
 			echo "Would push to origin/master"; \
@@ -106,6 +120,8 @@ re-release: ## Rerelease target with tag argument. Usage: make re-release tag=<t
 		git push origin "$$TAG" --no-verify --force-with-lease; \
 		echo "Recreating GitHub release..."; \
 		gh release create "$$TAG" --title "$$TAG" --notes "Re-release of $$TAG"; \
+		echo "Building release binary..."; \
+		$(MAKE) build-release; \
 		echo "Done!"; \
 	else \
 		echo "[DRY RUN] Showing what would be done..."; \
