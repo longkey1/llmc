@@ -25,10 +25,19 @@ This will create a configuration file at `$HOME/.config/llmc/config.toml` with d
 
 2. View current configuration:
 ```bash
+# Show all configuration values
 llmc config
+
+# Show specific field only
+llmc config provider
+llmc config model
+llmc config baseurl
+llmc config token
+llmc config promptdirs
+llmc config configfile
 ```
 
-This will display all current configuration values, with the API token masked for security.
+This will display all current configuration values, with the API token masked for security. You can also specify a field name to show only that field's value.
 
 3. Edit the configuration file to set your API keys and preferences:
 ```toml
@@ -56,8 +65,8 @@ export LLMC_MODEL="gpt-3.5-turbo"
 # Set API token
 export LLMC_TOKEN="your-api-token"
 
-# Set prompt directories (comma-separated)
-export LLMC_PROMPT_DIRS="/path/to/prompts,/another/prompt/directory"
+# Set prompt directories (colon-separated)
+export LLMC_PROMPT_DIRS="/path/to/prompts:/another/prompt/directory"
 ```
 
 You can add these to your shell profile (e.g., `~/.bashrc`, `~/.zshrc`) to make them persistent:
@@ -71,6 +80,8 @@ source ~/.bashrc
 ```
 
 **Note**: Environment variables override configuration file settings. If both are set, the environment variable value will be used.
+
+**Note**: Prompt directories in environment variables use colon (`:`) as separator, similar to the PATH environment variable.
 
 ## Usage
 
@@ -97,6 +108,15 @@ model = "gpt-4"  # Optional: overrides the default model for this prompt
 ```
 
 You can also create prompt files in multiple directories. The tool will search for prompt files in all configured directories in the order they are specified in the configuration.
+
+List available prompt templates:
+```bash
+# List all available prompts
+llmc prompt
+
+# List prompts with directory information
+llmc prompt --with-dir
+```
 
 Use the prompt:
 ```bash

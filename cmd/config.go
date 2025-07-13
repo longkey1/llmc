@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/longkey1/llmc/internal/llmc"
 	"github.com/spf13/cobra"
@@ -11,10 +12,20 @@ import (
 
 // configCmd represents the config command
 var configCmd = &cobra.Command{
-	Use:   "config",
+	Use:   "config [field]",
 	Short: "Display current configuration",
 	Long: `Display the current configuration values.
-This command shows all configuration values loaded from the config file and environment variables.`,
+This command shows all configuration values loaded from the config file and environment variables.
+
+If a field name is specified, only that field's value is displayed.
+Available fields: configfile, provider, baseurl, model, token, promptdirs
+
+Examples:
+  llmc config                    # Show all configuration
+  llmc config provider          # Show only provider
+  llmc config model             # Show only model
+  llmc config promptdirs        # Show only prompt directories`,
+	Args: cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		// Load configuration from file
 		config, err := llmc.LoadConfig()
@@ -23,7 +34,31 @@ This command shows all configuration values loaded from the config file and envi
 			os.Exit(1)
 		}
 
-		// Display configuration values
+		// If a field is specified, show only that field
+		if len(args) > 0 {
+			field := strings.ToLower(args[0])
+			switch field {
+			case "configfile":
+				fmt.Println(viper.ConfigFileUsed())
+			case "provider":
+				fmt.Println(config.Provider)
+			case "baseurl":
+				fmt.Println(config.BaseURL)
+			case "model":
+				fmt.Println(config.Model)
+			case "token":
+				fmt.Println(maskToken(config.Token))
+			case "promptdirs":
+				fmt.Println(strings.Join(config.PromptDirs, ","))
+			default:
+				fmt.Fprintf(os.Stderr, "Unknown field: %s\n", args[0])
+				fmt.Fprintf(os.Stderr, "Available fields: configfile, provider, baseurl, model, token, promptdirs\n")
+				os.Exit(1)
+			}
+			return
+		}
+
+		// Display all configuration values
 		fmt.Printf("ConfigFile: %s\n", viper.ConfigFileUsed())
 		fmt.Printf("Provider: %s\n", config.Provider)
 		fmt.Printf("BaseURL: %s\n", config.BaseURL)
