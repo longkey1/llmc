@@ -65,8 +65,8 @@ export LLMC_MODEL="gpt-3.5-turbo"
 # Set API token
 export LLMC_TOKEN="your-api-token"
 
-# Set prompt directories (colon-separated)
-export LLMC_PROMPT_DIRS="/path/to/prompts:/another/prompt/directory"
+# Set prompt directories (comma-separated)
+export LLMC_PROMPT_DIRS="/path/to/prompts,/another/prompt/directory"
 ```
 
 You can add these to your shell profile (e.g., `~/.bashrc`, `~/.zshrc`) to make them persistent:
@@ -81,7 +81,7 @@ source ~/.bashrc
 
 **Note**: Environment variables override configuration file settings. If both are set, the environment variable value will be used.
 
-**Note**: Prompt directories in environment variables use colon (`:`) as separator, similar to the PATH environment variable.
+**Note**: Prompt directories in environment variables use comma (`,`) as separator.
 
 ## Usage
 
