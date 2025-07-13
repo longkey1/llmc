@@ -27,6 +27,7 @@ the names of available .toml prompt files, including those in subdirectories.
 The prompt files should be in TOML format with the following structure:
 system = "System prompt with optional {{input}} placeholder"
 user = "User prompt with optional {{input}} placeholder"
+model = "optional-model-name"  # Optional: overrides the default model for this prompt
 
 Prompt names are displayed as relative paths from the prompt directory root.
 For example, a file at ${prompt_dir}/foo/bar.toml will be displayed as "foo/bar".

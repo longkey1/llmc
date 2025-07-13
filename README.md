@@ -93,6 +93,7 @@ Create a prompt file (e.g., `$HOME/.config/llmc/prompts/example.toml`):
 ```toml
 system = "You are a helpful assistant. {{input}}"
 user = "Please help me with: {{input}}"
+model = "gpt-4"  # Optional: overrides the default model for this prompt
 ```
 
 You can also create prompt files in multiple directories. The tool will search for prompt files in all configured directories in the order they are specified in the configuration.
@@ -174,6 +175,7 @@ Prompt templates are TOML files with the following structure:
 ```toml
 system = "System prompt with optional {{input}} placeholder"
 user = "User prompt with optional {{input}} placeholder"
+model = "optional-model-name"  # Optional: overrides the default model for this prompt
 ```
 
 The `{{input}}` placeholder will be replaced with the user's message. Additional placeholders can be defined using the `--arg` flag.

@@ -40,7 +40,8 @@ If not specified, the values will be taken from the configuration file.
 
 The prompt file should be in TOML format with the following structure:
 system = "System prompt with optional {{input}} placeholder"
-user = "User prompt with optional {{input}} placeholder"`,
+user = "User prompt with optional {{input}} placeholder"
+model = "optional-model-name"  # Optional: overrides the default model for this prompt"`,
 	Run: func(cmd *cobra.Command, args []string) {
 		// Load configuration from file
 		config, err := llmc.LoadConfig()
@@ -69,13 +70,6 @@ user = "User prompt with optional {{input}} placeholder"`,
 			fmt.Fprintf(os.Stderr, "Prompt dirs: %v\n", config.PromptDirs)
 		}
 
-		// Select provider
-		llmProvider, err := llmc.NewProvider(config)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
-		}
-
 		// Get message from arguments, editor, or stdin
 		var message string
 		if useEditor {
@@ -97,7 +91,22 @@ user = "User prompt with optional {{input}} placeholder"`,
 		}
 
 		// Format message with prompt and arguments
-		formattedMessage, err := llmc.FormatMessage(message, prompt, config.PromptDirs, argFlags)
+		formattedMessage, promptModel, err := llmc.FormatMessage(message, prompt, config.PromptDirs, argFlags)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+
+		// Override model with prompt file model if specified
+		if promptModel != nil {
+			config.Model = *promptModel
+			if verbose {
+				fmt.Fprintf(os.Stderr, "Using model from prompt file: %s\n", config.Model)
+			}
+		}
+
+		// Select provider (after potential model override)
+		llmProvider, err := llmc.NewProvider(config)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
