@@ -35,9 +35,14 @@ llmc config baseurl
 llmc config token
 llmc config promptdirs
 llmc config configfile
+
+# Example outputs:
+# llmc config provider    → openai
+# llmc config model       → gpt-4.1
+# llmc config promptdirs  → /path/to/prompts,/another/prompt/directory
 ```
 
-This will display all current configuration values, with the API token masked for security. You can also specify a field name to show only that field's value.
+This will display all current configuration values, with the API token masked for security. You can also specify a field name to show only that field's value. The `promptdirs` field displays directories as comma-separated values.
 
 3. Edit the configuration file to set your API keys and preferences:
 ```toml

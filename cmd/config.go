@@ -64,7 +64,7 @@ Examples:
 		fmt.Printf("BaseURL: %s\n", config.BaseURL)
 		fmt.Printf("Model: %s\n", config.Model)
 		fmt.Printf("Token: %s\n", maskToken(config.Token))
-		fmt.Printf("PromptDirectories: %v\n", config.PromptDirs)
+		fmt.Printf("PromptDirectories: %s\n", strings.Join(config.PromptDirs, ","))
 	},
 }
 
