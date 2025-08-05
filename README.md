@@ -116,17 +116,14 @@ You can also create prompt files in multiple directories. The tool will search f
 
 List available prompt templates:
 ```bash
-# List all available prompts
+# List all available prompts (shows in table format with file paths)
 llmc prompt
-
-# List prompts with directory information
-llmc prompt --with-dir
 
 # List prompts with verbose output (shows duplicate file warnings)
 llmc prompt --verbose
 ```
 
-When using `--verbose` or `--with-dir`, the tool will show warnings if the same prompt file name exists in multiple directories, indicating which directory's file will be used.
+The prompt list is displayed in a table format showing the prompt name and the full file path. When using `--verbose`, the tool will show warnings if the same prompt file name exists in multiple directories, indicating which directory's file will be used.
 
 Use the prompt:
 ```bash
@@ -225,6 +222,8 @@ You can use the `--verbose` flag with the `prompt` command to see warnings about
 ```bash
 llmc prompt --verbose
 ```
+
+The prompt list will show the full file path for each prompt, making it easy to see which directory each prompt comes from.
 
 ## Debug Mode
 

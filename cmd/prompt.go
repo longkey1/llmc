@@ -14,8 +14,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var withDir bool
-
 // promptCmd represents the prompt command
 var promptCmd = &cobra.Command{
 	Use:   "prompt",
@@ -29,10 +27,7 @@ system = "System prompt with optional {{input}} placeholder"
 user = "User prompt with optional {{input}} placeholder"
 model = "optional-model-name"  # Optional: overrides the default model for this prompt
 
-Prompt names are displayed as relative paths from the prompt directory root.
-For example, a file at ${prompt_dir}/foo/bar.toml will be displayed as "foo/bar".
-
-If you want to see which directory each prompt comes from, use the --with-dir option.`,
+Prompt names are displayed in a table format with the relative path from the prompt directory root and the full file path.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		// Load configuration from file
 		config, err := llmc.LoadConfig()
@@ -48,7 +43,8 @@ If you want to see which directory each prompt comes from, use the --with-dir op
 
 		// Collect all prompt files from all directories
 		var allPrompts []string
-		promptMap := make(map[string]string) // prompt name -> directory path
+		promptMap := make(map[string]string)     // prompt name -> directory path
+		promptPathMap := make(map[string]string) // prompt name -> full file path
 
 		for _, promptDir := range config.PromptDirs {
 			// Convert relative path to absolute path if needed
@@ -107,6 +103,7 @@ If you want to see which directory each prompt comes from, use the --with-dir op
 				}
 				// Always update with the current directory (later directories take precedence)
 				promptMap[promptName] = absPromptDir
+				promptPathMap[promptName] = path
 				// Only add to allPrompts if this is the first time we've seen this prompt
 				if !exists {
 					allPrompts = append(allPrompts, promptName)
@@ -136,13 +133,22 @@ If you want to see which directory each prompt comes from, use the --with-dir op
 		}
 
 		fmt.Printf("Available prompt templates (%d found):\n\n", len(allPrompts))
+
+		// Calculate maximum width for prompt names (minimum 15 characters)
+		maxNameWidth := 15
 		for _, promptName := range allPrompts {
-			dir := promptMap[promptName]
-			if withDir {
-				fmt.Printf("  %s (from %s)\n", promptName, dir)
-			} else {
-				fmt.Printf("  %s\n", promptName)
+			if len(promptName) > maxNameWidth {
+				maxNameWidth = len(promptName)
 			}
+		}
+
+		// Display in table format
+		fmt.Printf("%-*s  %s\n", maxNameWidth, "PROMPT", "FILE PATH")
+		fmt.Printf("%s  %s\n", strings.Repeat("-", maxNameWidth), strings.Repeat("-", 80))
+
+		for _, promptName := range allPrompts {
+			filePath := promptPathMap[promptName]
+			fmt.Printf("%-*s  %s\n", maxNameWidth, promptName, filePath)
 		}
 
 		fmt.Printf("\nUse a prompt template with: llmc chat --prompt <name> [message]\n")
@@ -152,5 +158,4 @@ If you want to see which directory each prompt comes from, use the --with-dir op
 
 func init() {
 	rootCmd.AddCommand(promptCmd)
-	promptCmd.Flags().BoolVar(&withDir, "with-dir", false, "Show the directory each prompt was found in")
 }
