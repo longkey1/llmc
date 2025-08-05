@@ -49,6 +49,7 @@ Examples:
 			case "token":
 				fmt.Println(maskToken(config.Token))
 			case "promptdirs":
+				// PromptDirs are already absolute paths
 				fmt.Println(strings.Join(config.PromptDirs, ","))
 			default:
 				fmt.Fprintf(os.Stderr, "Unknown field: %s\n", args[0])
@@ -64,6 +65,7 @@ Examples:
 		fmt.Printf("BaseURL: %s\n", config.BaseURL)
 		fmt.Printf("Model: %s\n", config.Model)
 		fmt.Printf("Token: %s\n", maskToken(config.Token))
+		// PromptDirs are already absolute paths
 		fmt.Printf("PromptDirectories: %s\n", strings.Join(config.PromptDirs, ","))
 	},
 }

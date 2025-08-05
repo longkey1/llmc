@@ -53,6 +53,16 @@ func LoadConfig() (*Config, error) {
 	if err := viper.Unmarshal(config); err != nil {
 		return nil, fmt.Errorf("error unmarshaling config: %v", err)
 	}
+
+	// Convert prompt directories to absolute paths
+	for i, promptDir := range config.PromptDirs {
+		absPath, err := ResolvePath(promptDir)
+		if err != nil {
+			return nil, fmt.Errorf("error resolving prompt directory path '%s': %v", promptDir, err)
+		}
+		config.PromptDirs[i] = absPath
+	}
+
 	return config, nil
 }
 
@@ -75,7 +85,18 @@ func ResolvePath(path string) (string, error) {
 
 	// Use config file directory as base
 	configDir := filepath.Dir(configFile)
-	return filepath.Join(configDir, path), nil
+
+	// If configDir is relative, make it absolute
+	if !filepath.IsAbs(configDir) {
+		cwd, err := os.Getwd()
+		if err != nil {
+			return "", fmt.Errorf("error getting current working directory: %v", err)
+		}
+		configDir = filepath.Join(cwd, configDir)
+	}
+
+	resolvedPath := filepath.Join(configDir, path)
+	return resolvedPath, nil
 }
 
 // Provider defines the interface for LLM providers
@@ -128,13 +149,8 @@ func FormatMessage(message string, promptName string, promptDirs []string, args 
 	var promptPath string
 	var found bool
 	for _, promptDir := range promptDirs {
-		// Convert relative path to absolute path if needed
-		absPromptDir, err := ResolvePath(promptDir)
-		if err != nil {
-			return "", nil, err
-		}
-
-		candidatePath := filepath.Join(absPromptDir, promptFile)
+		// promptDir is already an absolute path
+		candidatePath := filepath.Join(promptDir, promptFile)
 		if _, err := os.Stat(candidatePath); err == nil {
 			promptPath = candidatePath
 			found = true

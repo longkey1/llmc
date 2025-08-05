@@ -47,23 +47,17 @@ Prompt names are displayed in a table format with the relative path from the pro
 		promptPathMap := make(map[string]string) // prompt name -> full file path
 
 		for _, promptDir := range config.PromptDirs {
-			// Convert relative path to absolute path if needed
-			absPromptDir, err := llmc.ResolvePath(promptDir)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Error resolving path %s: %v\n", promptDir, err)
-				continue
-			}
-
+			// promptDir is already an absolute path
 			// Check if directory exists
-			if _, err := os.Stat(absPromptDir); os.IsNotExist(err) {
+			if _, err := os.Stat(promptDir); os.IsNotExist(err) {
 				if verbose {
-					fmt.Fprintf(os.Stderr, "Prompt directory does not exist: %s (resolved from %s)\n", absPromptDir, promptDir)
+					fmt.Fprintf(os.Stderr, "Prompt directory does not exist: %s\n", promptDir)
 				}
 				continue
 			}
 
 			// Recursively find all .toml files
-			err = filepath.Walk(absPromptDir, func(path string, info os.FileInfo, err error) error {
+			err = filepath.Walk(promptDir, func(path string, info os.FileInfo, err error) error {
 				if err != nil {
 					return err
 				}
@@ -79,7 +73,7 @@ Prompt names are displayed in a table format with the relative path from the pro
 				}
 
 				// Calculate relative path from prompt directory
-				relPath, err := filepath.Rel(absPromptDir, path)
+				relPath, err := filepath.Rel(promptDir, path)
 				if err != nil {
 					if verbose {
 						fmt.Fprintf(os.Stderr, "Error calculating relative path for %s: %v\n", path, err)
@@ -98,11 +92,11 @@ Prompt names are displayed in a table format with the relative path from the pro
 				if exists {
 					if verbose {
 						fmt.Fprintf(os.Stderr, "Warning: Prompt '%s' found in multiple directories: %s and %s (using %s)\n",
-							promptName, existingDir, absPromptDir, absPromptDir)
+							promptName, existingDir, promptDir, promptDir)
 					}
 				}
 				// Always update with the current directory (later directories take precedence)
-				promptMap[promptName] = absPromptDir
+				promptMap[promptName] = promptDir
 				promptPathMap[promptName] = path
 				// Only add to allPrompts if this is the first time we've seen this prompt
 				if !exists {
@@ -113,7 +107,7 @@ Prompt names are displayed in a table format with the relative path from the pro
 			})
 
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "Error walking prompt directory %s: %v\n", absPromptDir, err)
+				fmt.Fprintf(os.Stderr, "Error walking prompt directory %s: %v\n", promptDir, err)
 				continue
 			}
 		}
