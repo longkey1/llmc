@@ -98,13 +98,17 @@ If you want to see which directory each prompt comes from, use the --with-dir op
 				promptName = filepath.ToSlash(promptName)
 
 				// Check if we already found this prompt in another directory
-				if existingDir, exists := promptMap[promptName]; exists {
+				existingDir, exists := promptMap[promptName]
+				if exists {
 					if verbose {
-						fmt.Fprintf(os.Stderr, "Warning: Prompt '%s' found in multiple directories: %s and %s\n",
-							promptName, existingDir, absPromptDir)
+						fmt.Fprintf(os.Stderr, "Warning: Prompt '%s' found in multiple directories: %s and %s (using %s)\n",
+							promptName, existingDir, absPromptDir, absPromptDir)
 					}
-				} else {
-					promptMap[promptName] = absPromptDir
+				}
+				// Always update with the current directory (later directories take precedence)
+				promptMap[promptName] = absPromptDir
+				// Only add to allPrompts if this is the first time we've seen this prompt
+				if !exists {
 					allPrompts = append(allPrompts, promptName)
 				}
 

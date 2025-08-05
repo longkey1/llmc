@@ -138,7 +138,7 @@ func FormatMessage(message string, promptName string, promptDirs []string, args 
 		if _, err := os.Stat(candidatePath); err == nil {
 			promptPath = candidatePath
 			found = true
-			break
+			// Continue searching to find later occurrences (later directories take precedence)
 		}
 	}
 

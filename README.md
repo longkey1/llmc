@@ -112,7 +112,7 @@ user = "Please help me with: {{input}}"
 model = "gpt-4"  # Optional: overrides the default model for this prompt
 ```
 
-You can also create prompt files in multiple directories. The tool will search for prompt files in all configured directories in the order they are specified in the configuration.
+You can also create prompt files in multiple directories. The tool will search for prompt files in all configured directories in the order they are specified in the configuration. If the same prompt file name exists in multiple directories, the file from the later directory in the configuration will be used (later directories take precedence).
 
 List available prompt templates:
 ```bash
@@ -121,7 +121,12 @@ llmc prompt
 
 # List prompts with directory information
 llmc prompt --with-dir
+
+# List prompts with verbose output (shows duplicate file warnings)
+llmc prompt --verbose
 ```
+
+When using `--verbose` or `--with-dir`, the tool will show warnings if the same prompt file name exists in multiple directories, indicating which directory's file will be used.
 
 Use the prompt:
 ```bash
@@ -204,6 +209,22 @@ model = "optional-model-name"  # Optional: overrides the default model for this 
 ```
 
 The `{{input}}` placeholder will be replaced with the user's message. Additional placeholders can be defined using the `--arg` flag.
+
+### Multiple Prompt Directories
+
+When you have multiple prompt directories configured, the tool searches for prompt files in the order specified in your configuration. If the same prompt file name exists in multiple directories, the file from the later directory will be used (later directories take precedence over earlier ones).
+
+For example, if your configuration has:
+```toml
+prompt_dirs = ["/path/to/dir1", "/path/to/dir2", "/path/to/dir3"]
+```
+
+And both `/path/to/dir1/example.toml` and `/path/to/dir3/example.toml` exist, the tool will use `/path/to/dir3/example.toml`.
+
+You can use the `--verbose` flag with the `prompt` command to see warnings about duplicate files:
+```bash
+llmc prompt --verbose
+```
 
 ## Debug Mode
 
