@@ -85,6 +85,7 @@ func initConfig() {
 	viper.SetDefault("model", defaultConfig.Model)
 	viper.SetDefault("token", defaultConfig.Token)
 	viper.SetDefault("prompt_dirs", defaultConfig.PromptDirs)
+	viper.SetDefault("enable_web_search", defaultConfig.EnableWebSearch)
 
 	// Read config file
 	if err := viper.ReadInConfig(); err != nil {
@@ -111,5 +112,6 @@ func initConfig() {
 		fmt.Fprintln(os.Stderr, "  LLMC_MODEL:", viper.GetString("model"))
 		fmt.Fprintln(os.Stderr, "  LLMC_BASE_URL:", viper.GetString("base_url"))
 		fmt.Fprintln(os.Stderr, "  LLMC_PROMPT_DIRS:", viper.GetStringSlice("prompt_dirs"))
+		fmt.Fprintln(os.Stderr, "  LLMC_ENABLE_WEB_SEARCH:", viper.GetBool("enable_web_search"))
 	}
 }

@@ -14,11 +14,12 @@ import (
 
 // Config holds the configuration for the LLM provider
 type Config struct {
-	Provider   string   `toml:"provider" mapstructure:"provider"`
-	BaseURL    string   `toml:"base_url" mapstructure:"base_url"`
-	Model      string   `toml:"model" mapstructure:"model"`
-	Token      string   `toml:"token" mapstructure:"token"`
-	PromptDirs []string `toml:"prompt_dirs" mapstructure:"prompt_dirs"`
+	Provider        string   `toml:"provider" mapstructure:"provider"`
+	BaseURL         string   `toml:"base_url" mapstructure:"base_url"`
+	Model           string   `toml:"model" mapstructure:"model"`
+	Token           string   `toml:"token" mapstructure:"token"`
+	PromptDirs      []string `toml:"prompt_dirs" mapstructure:"prompt_dirs"`
+	EnableWebSearch bool     `toml:"enable_web_search" mapstructure:"enable_web_search"`
 }
 
 // GetModel returns the model name
@@ -39,11 +40,12 @@ func (c *Config) GetToken() string {
 // NewDefaultConfig returns a new Config with default values
 func NewDefaultConfig(promptDir string) *Config {
 	return &Config{
-		Provider:   openai.ProviderName,
-		BaseURL:    openai.DefaultBaseURL,
-		Model:      openai.DefaultModel,
-		Token:      "",
-		PromptDirs: []string{promptDir},
+		Provider:        openai.ProviderName,
+		BaseURL:         openai.DefaultBaseURL,
+		Model:           openai.DefaultModel,
+		Token:           "",
+		PromptDirs:      []string{promptDir},
+		EnableWebSearch: false,
 	}
 }
 
@@ -102,6 +104,7 @@ func ResolvePath(path string) (string, error) {
 // Provider defines the interface for LLM providers
 type Provider interface {
 	Chat(message string) (string, error)
+	SetWebSearch(enabled bool)
 }
 
 // NewProvider creates a new provider instance based on the configuration

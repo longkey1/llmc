@@ -22,6 +22,7 @@ var (
 	prompt    string
 	argFlags  []string
 	useEditor bool
+	webSearch bool
 )
 
 // chatCmd represents the chat command
@@ -112,6 +113,9 @@ model = "optional-model-name"  # Optional: overrides the default model for this 
 			os.Exit(1)
 		}
 
+		// Enable web search if specified in config or flag
+		llmProvider.SetWebSearch(config.EnableWebSearch || webSearch)
+
 		// Send message and print response
 		response, err := llmProvider.Chat(formattedMessage)
 		if err != nil {
@@ -166,4 +170,5 @@ func init() {
 	chatCmd.Flags().StringVarP(&prompt, "prompt", "p", "", "Name of the prompt template (without .toml extension)")
 	chatCmd.Flags().StringArrayVar(&argFlags, "arg", []string{}, "Key-value pairs for prompt template (format: key:value)")
 	chatCmd.Flags().BoolVarP(&useEditor, "editor", "e", false, "Use default editor (from EDITOR environment variable) to compose message")
+	chatCmd.Flags().BoolVar(&webSearch, "web-search", false, "Enable web search for real-time information")
 }

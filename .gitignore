@@ -1,5 +1,6 @@
 /.devcontainer/devcontainer.json
 /llmc
+CLAUDE.md
 
 # Binaries for programs and plugins
 *.exe

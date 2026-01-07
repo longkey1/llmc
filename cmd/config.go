@@ -18,13 +18,14 @@ var configCmd = &cobra.Command{
 This command shows all configuration values loaded from the config file and environment variables.
 
 If a field name is specified, only that field's value is displayed.
-Available fields: configfile, provider, baseurl, model, token, promptdirs
+Available fields: configfile, provider, baseurl, model, token, promptdirs, websearch
 
 Examples:
   llmc config                    # Show all configuration
   llmc config provider          # Show only provider
   llmc config model             # Show only model
-  llmc config promptdirs        # Show only prompt directories`,
+  llmc config promptdirs        # Show only prompt directories
+  llmc config websearch         # Show only web search setting`,
 	Args: cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		// Load configuration from file
@@ -51,9 +52,11 @@ Examples:
 			case "promptdirs":
 				// PromptDirs are already absolute paths
 				fmt.Println(strings.Join(config.PromptDirs, ","))
+			case "websearch":
+				fmt.Println(config.EnableWebSearch)
 			default:
 				fmt.Fprintf(os.Stderr, "Unknown field: %s\n", args[0])
-				fmt.Fprintf(os.Stderr, "Available fields: configfile, provider, baseurl, model, token, promptdirs\n")
+				fmt.Fprintf(os.Stderr, "Available fields: configfile, provider, baseurl, model, token, promptdirs, websearch\n")
 				os.Exit(1)
 			}
 			return
@@ -67,6 +70,7 @@ Examples:
 		fmt.Printf("Token: %s\n", maskToken(config.Token))
 		// PromptDirs are already absolute paths
 		fmt.Printf("PromptDirectories: %s\n", strings.Join(config.PromptDirs, ","))
+		fmt.Printf("WebSearch: %v\n", config.EnableWebSearch)
 	},
 }
 
