@@ -177,6 +177,9 @@ echo "Hello, how are you?" | llmc chat
 
 # Use default editor (from EDITOR environment variable)
 llmc chat -e
+
+# List available models
+llmc models
 ```
 
 ### Using Prompts
@@ -508,13 +511,33 @@ llmc chat --prompt example "Hello"  # example.toml has model="o3"
 # Uses: gpt-4o-mini (env var takes priority over template and config files)
 ```
 
+## Listing Available Models
+
+View all available models for each provider:
+
+```bash
+# List models for the currently configured provider
+llmc models
+
+# List models for a specific provider
+llmc models openai
+llmc models gemini
+```
+
+The output shows:
+- **MODEL ID**: The identifier to use with `--model` flag
+- **DEFAULT**: Indicates which model is used when none is specified
+- **DESCRIPTION**: Brief description of each model
+
 ## Model Compatibility
 
 LLMC uses provider-specific APIs:
 
-**OpenAI**: Uses Responses API. Recent models like gpt-4o and o-series are supported. If you use an unsupported model, you'll receive a helpful error message.
+**OpenAI**: Uses Responses API with support for recent models. Use `llmc models openai` to see the complete list of supported models.
 
-**Gemini**: All current Gemini models are supported (e.g., gemini-2.0-flash, gemini-2.5-pro).
+**Gemini**: Supports current Gemini models. Use `llmc models gemini` to see the complete list of supported models.
+
+If you use an unsupported model, you'll receive a helpful error message with suggestions.
 
 ## Debug Mode
 

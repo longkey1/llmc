@@ -1,36 +1,33 @@
+# Project specific
 /.devcontainer/devcontainer.json
 /llmc
 CLAUDE.md
 
-# Binaries for programs and plugins
+# Binaries
 *.exe
 *.exe~
 *.dll
 *.so
 *.dylib
-
-# Test binary, built with `go test -c`
 *.test
-*.toml
-
-# Output of the go coverage tool, specifically when used with LiteIDE
 *.out
 
-# Dependency directories (remove the comment below to include it)
-vendor/
+# Configuration
+*.toml
 
-# Go workspace file
+# Dependencies
+vendor/
 go.work
 
-# Build directory
+# Build artifacts
 bin/
 pkg/
 
-# IDE specific files
+# IDE
 .idea/
 .vscode/
 *.swp
 *.swo
 
-# Cache directories
+# Cache
 .cache/
