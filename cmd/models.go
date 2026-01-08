@@ -64,8 +64,9 @@ Examples:
 		}
 
 		if len(models) == 0 {
-			fmt.Println("No models found.")
-			return
+			fmt.Fprintf(os.Stderr, "Error: Failed to retrieve models from API.\n")
+			fmt.Fprintf(os.Stderr, "Please check your API token and network connection.\n")
+			os.Exit(1)
 		}
 
 		// Display provider name

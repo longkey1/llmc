@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"sort"
 	"strings"
 
 	"github.com/longkey1/llmc/internal/llmc"
@@ -17,12 +18,25 @@ const (
 	DefaultModel   = "gemini-2.0-flash"
 )
 
-// Supported models for Gemini
+// Supported models for Gemini (fallback list)
 var supportedModels = []llmc.ModelInfo{
 	{ID: "gemini-2.0-flash", Description: "Fast and efficient Gemini 2.0", IsDefault: true},
 	{ID: "gemini-2.0-pro", Description: "Advanced Gemini 2.0 for complex tasks", IsDefault: false},
 	{ID: "gemini-1.5-pro", Description: "Previous generation pro model", IsDefault: false},
 	{ID: "gemini-1.5-flash", Description: "Previous generation flash model", IsDefault: false},
+}
+
+// ModelsAPIResponse represents the response from Gemini's models endpoint
+type ModelsAPIResponse struct {
+	Models []GeminiModelData `json:"models"`
+}
+
+// GeminiModelData represents a single model in the API response
+type GeminiModelData struct {
+	Name                      string   `json:"name"`
+	DisplayName               string   `json:"displayName"`
+	Description               string   `json:"description"`
+	SupportedGenerationMethods []string `json:"supportedGenerationMethods"`
 }
 
 // GeminiRequest represents the request body for Gemini's generate content API
@@ -129,9 +143,102 @@ func (p *Provider) SetWebSearch(enabled bool) {
 	p.webSearchEnabled = enabled
 }
 
-// ListModels returns the list of supported models
+// ListModels returns the list of supported models from the API
 func (p *Provider) ListModels() []llmc.ModelInfo {
-	return supportedModels
+	models, err := p.fetchModelsFromAPI()
+	if err != nil {
+		// Return empty list on error (caller should handle)
+		return nil
+	}
+	return models
+}
+
+// fetchModelsFromAPI retrieves the list of available models from Gemini API
+func (p *Provider) fetchModelsFromAPI() ([]llmc.ModelInfo, error) {
+	// Build URL with API key
+	url := p.config.GetBaseURL() + "/models?key=" + p.config.GetToken()
+
+	// Create HTTP request
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("error creating request: %v", err)
+	}
+
+	// Send request
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("error sending request: %v", err)
+	}
+	defer resp.Body.Close()
+
+	// Read response body
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("error reading response: %v", err)
+	}
+
+	// Check for error response
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("API error: %s", string(body))
+	}
+
+	// Parse response
+	var result ModelsAPIResponse
+	if err := json.Unmarshal(body, &result); err != nil {
+		return nil, fmt.Errorf("error parsing response: %v", err)
+	}
+
+	// Convert to ModelInfo format
+	models := make([]llmc.ModelInfo, 0)
+	defaultModel := p.config.GetModel()
+
+	for _, model := range result.Models {
+		// Extract model ID from name (remove "models/" prefix)
+		id := strings.TrimPrefix(model.Name, "models/")
+
+		// Only include models that support generateContent
+		if !contains(model.SupportedGenerationMethods, "generateContent") {
+			continue
+		}
+
+		// Filter: only include gemini models
+		if !strings.HasPrefix(id, "gemini-") {
+			continue
+		}
+
+		isDefault := (id == defaultModel)
+
+		// Use API-provided description or displayName
+		description := model.Description
+		if description == "" {
+			description = model.DisplayName
+		}
+		// If no description available, leave empty
+
+		models = append(models, llmc.ModelInfo{
+			ID:          id,
+			Description: description,
+			IsDefault:   isDefault,
+		})
+	}
+
+	// Sort models by ID
+	sort.Slice(models, func(i, j int) bool {
+		return models[i].ID < models[j].ID
+	})
+
+	return models, nil
+}
+
+// contains checks if a string slice contains a specific string
+func contains(slice []string, item string) bool {
+	for _, s := range slice {
+		if s == item {
+			return true
+		}
+	}
+	return false
 }
 
 // Chat sends a message to Gemini's API and returns the response
