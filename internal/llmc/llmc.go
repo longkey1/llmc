@@ -121,9 +121,10 @@ func NewProvider(config *Config) (Provider, error) {
 
 // Prompt represents the structure of a TOML prompt file
 type Prompt struct {
-	System string  `toml:"system"`
-	User   string  `toml:"user"`
-	Model  *string `toml:"model,omitempty"`
+	System    string  `toml:"system"`
+	User      string  `toml:"user"`
+	Model     *string `toml:"model,omitempty"`
+	WebSearch *bool   `toml:"web_search,omitempty"`
 }
 
 // LoadPrompt loads a prompt file and returns its contents
@@ -136,10 +137,10 @@ func LoadPrompt(filePath string) (*Prompt, error) {
 }
 
 // FormatMessage formats the message with prompt if specified
-// Returns the formatted message and the model specified in the prompt file (if any)
-func FormatMessage(message string, promptName string, promptDirs []string, args []string) (string, *string, error) {
+// Returns the formatted message, the model specified in the prompt file (if any), and web search setting (if any)
+func FormatMessage(message string, promptName string, promptDirs []string, args []string) (string, *string, *bool, error) {
 	if promptName == "" {
-		return message, nil, nil
+		return message, nil, nil, nil
 	}
 
 	// Add .toml extension if not present
@@ -162,19 +163,19 @@ func FormatMessage(message string, promptName string, promptDirs []string, args 
 	}
 
 	if !found {
-		return "", nil, fmt.Errorf("prompt file '%s' not found in any of the prompt directories: %v", promptFile, promptDirs)
+		return "", nil, nil, fmt.Errorf("prompt file '%s' not found in any of the prompt directories: %v", promptFile, promptDirs)
 	}
 
 	// Load prompt template
 	promptTemplate, err := LoadPrompt(promptPath)
 	if err != nil {
-		return "", nil, fmt.Errorf("error loading prompt file: %v", err)
+		return "", nil, nil, fmt.Errorf("error loading prompt file: %v", err)
 	}
 
 	// Process command line arguments
 	argMap, err := processArgs(args)
 	if err != nil {
-		return "", nil, fmt.Errorf("error processing arguments: %v", err)
+		return "", nil, nil, fmt.Errorf("error processing arguments: %v", err)
 	}
 
 	// Create a map of all replacements
@@ -193,7 +194,7 @@ func FormatMessage(message string, promptName string, promptDirs []string, args 
 		userPrompt = strings.ReplaceAll(userPrompt, placeholder, value)
 	}
 
-	return fmt.Sprintf("System: %s\n\nUser: %s", systemPrompt, userPrompt), promptTemplate.Model, nil
+	return fmt.Sprintf("System: %s\n\nUser: %s", systemPrompt, userPrompt), promptTemplate.Model, promptTemplate.WebSearch, nil
 }
 
 // processArgs processes the command line arguments and returns a map of key-value pairs

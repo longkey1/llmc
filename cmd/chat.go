@@ -42,7 +42,8 @@ If not specified, the values will be taken from the configuration file.
 The prompt file should be in TOML format with the following structure:
 system = "System prompt with optional {{input}} placeholder"
 user = "User prompt with optional {{input}} placeholder"
-model = "optional-model-name"  # Optional: overrides the default model for this prompt"`,
+model = "optional-model-name"  # Optional: overrides the default model for this prompt
+web_search = true  # Optional: enables web search for this prompt"`,
 	Run: func(cmd *cobra.Command, args []string) {
 		// Load configuration from file
 		config, err := llmc.LoadConfig()
@@ -55,20 +56,8 @@ model = "optional-model-name"  # Optional: overrides the default model for this 
 		if provider != "" {
 			config.Provider = provider
 		}
-		if model != "" {
-			config.Model = model
-		}
 		if baseURL != "" {
 			config.BaseURL = baseURL
-		}
-
-		// Debug output
-		if verbose {
-			fmt.Fprintf(os.Stderr, "Provider: %s\n", config.Provider)
-			fmt.Fprintf(os.Stderr, "Model: %s\n", config.Model)
-			fmt.Fprintf(os.Stderr, "Base URL: %s\n", config.BaseURL)
-			fmt.Fprintf(os.Stderr, "Token: %s\n", config.Token)
-			fmt.Fprintf(os.Stderr, "Prompt dirs: %v\n", config.PromptDirs)
 		}
 
 		// Get message from arguments, editor, or stdin
@@ -92,18 +81,44 @@ model = "optional-model-name"  # Optional: overrides the default model for this 
 		}
 
 		// Format message with prompt and arguments
-		formattedMessage, promptModel, err := llmc.FormatMessage(message, prompt, config.PromptDirs, argFlags)
+		formattedMessage, promptModel, promptWebSearch, err := llmc.FormatMessage(message, prompt, config.PromptDirs, argFlags)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}
 
-		// Override model with prompt file model if specified
-		if promptModel != nil {
+		// Apply model with consistent priority: flag > env > prompt template > config file
+		envModel := os.Getenv("LLMC_MODEL")
+		if cmd.Flags().Changed("model") {
+			// 1. Command line flag takes highest priority
+			config.Model = model
+			if verbose {
+				fmt.Fprintf(os.Stderr, "Using model from command line flag: %s\n", model)
+			}
+		} else if envModel != "" {
+			// 2. Environment variable is second priority
+			config.Model = envModel
+			if verbose {
+				fmt.Fprintf(os.Stderr, "Using model from environment variable: %s\n", envModel)
+			}
+		} else if promptModel != nil {
+			// 3. Prompt template setting is third priority
 			config.Model = *promptModel
 			if verbose {
 				fmt.Fprintf(os.Stderr, "Using model from prompt file: %s\n", config.Model)
 			}
+		} else if verbose {
+			// 4. Config file or default
+			fmt.Fprintf(os.Stderr, "Using model from config file: %s\n", config.Model)
+		}
+
+		// Debug output
+		if verbose {
+			fmt.Fprintf(os.Stderr, "Provider: %s\n", config.Provider)
+			fmt.Fprintf(os.Stderr, "Model: %s\n", config.Model)
+			fmt.Fprintf(os.Stderr, "Base URL: %s\n", config.BaseURL)
+			fmt.Fprintf(os.Stderr, "Token: %s\n", config.Token)
+			fmt.Fprintf(os.Stderr, "Prompt dirs: %v\n", config.PromptDirs)
 		}
 
 		// Select provider (after potential model override)
@@ -113,8 +128,37 @@ model = "optional-model-name"  # Optional: overrides the default model for this 
 			os.Exit(1)
 		}
 
-		// Enable web search if specified in config or flag
-		llmProvider.SetWebSearch(config.EnableWebSearch || webSearch)
+		// Enable web search if specified in flag, env, prompt template, or config file
+		// Priority: command line flag > environment variable > prompt template > config file
+		var enableWebSearch bool
+		envWebSearch := os.Getenv("LLMC_ENABLE_WEB_SEARCH")
+
+		if cmd.Flags().Changed("web-search") {
+			// 1. Command line flag takes highest priority
+			enableWebSearch = webSearch
+			if verbose {
+				fmt.Fprintf(os.Stderr, "Using web search setting from command line flag: %v\n", webSearch)
+			}
+		} else if envWebSearch != "" {
+			// 2. Environment variable is second priority
+			enableWebSearch = envWebSearch == "true" || envWebSearch == "1"
+			if verbose {
+				fmt.Fprintf(os.Stderr, "Using web search setting from environment variable: %v\n", enableWebSearch)
+			}
+		} else if promptWebSearch != nil {
+			// 3. Prompt template setting is third priority
+			enableWebSearch = *promptWebSearch
+			if verbose {
+				fmt.Fprintf(os.Stderr, "Using web search setting from prompt file: %v\n", *promptWebSearch)
+			}
+		} else {
+			// 4. Fall back to config file or default
+			enableWebSearch = config.EnableWebSearch
+			if verbose && config.EnableWebSearch {
+				fmt.Fprintf(os.Stderr, "Using web search setting from config file: %v\n", config.EnableWebSearch)
+			}
+		}
+		llmProvider.SetWebSearch(enableWebSearch)
 
 		// Send message and print response
 		response, err := llmProvider.Chat(formattedMessage)

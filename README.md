@@ -48,7 +48,7 @@ This will display all current configuration values, with the API token masked fo
 ```toml
 provider = "openai"  # or "gemini"
 base_url = "https://api.openai.com/v1"  # or Gemini's API URL
-model = "gpt-4.1"  # OpenAI: gpt-4o, gpt-4.1, o3, o4-mini, gpt-5 / Gemini: gemini-2.0-flash, etc.
+model = "your-model-name"  # Specify the model you want to use
 token = "your-api-token"
 prompt_dirs = ["/path/to/prompts", "/another/prompt/directory"]  # Multiple directories supported
 enable_web_search = false  # Enable web search by default (default: false)
@@ -66,7 +66,7 @@ export LLMC_PROVIDER="openai"
 export LLMC_BASE_URL="https://api.openai.com/v1"
 
 # Set model name
-export LLMC_MODEL="gpt-4.1"
+export LLMC_MODEL="your-model-name"
 
 # Set API token
 export LLMC_TOKEN="your-api-token"
@@ -84,11 +84,11 @@ You can add these to your shell profile (e.g., `~/.bashrc`, `~/.zshrc`) to make 
 # Add to your shell profile
 echo 'export LLMC_PROVIDER="openai"' >> ~/.bashrc
 echo 'export LLMC_TOKEN="your-api-token"' >> ~/.bashrc
-echo 'export LLMC_MODEL="gpt-4.1"' >> ~/.bashrc
+echo 'export LLMC_MODEL="your-model-name"' >> ~/.bashrc
 source ~/.bashrc
 ```
 
-**Note**: Environment variables override configuration file settings. If both are set, the environment variable value will be used.
+**Note**: Configuration priority is consistent across all settings: command-line flags > environment variables > prompt template (for model and web_search) > configuration file. See the "Configuration Priority" section below for details.
 
 **Note**: Prompt directories in environment variables use comma (`,`) as separator.
 
@@ -113,7 +113,8 @@ Create a prompt file (e.g., `$HOME/.config/llmc/prompts/example.toml`):
 ```toml
 system = "You are a helpful assistant. {{input}}"
 user = "Please help me with: {{input}}"
-model = "gpt-4"  # Optional: overrides the default model for this prompt
+model = "gpt-4o"  # Optional: overrides the default model for this prompt
+web_search = false  # Optional: disable web search for this prompt
 ```
 
 You can also create prompt files in multiple directories. The tool will search for prompt files in all configured directories in the order they are specified in the configuration. If the same prompt file name exists in multiple directories, the file from the later directory in the configuration will be used (later directories take precedence).
@@ -210,9 +211,15 @@ Prompt templates are TOML files with the following structure:
 system = "System prompt with optional {{input}} placeholder"
 user = "User prompt with optional {{input}} placeholder"
 model = "optional-model-name"  # Optional: overrides the default model for this prompt
+web_search = true  # Optional: enables web search for this prompt (default: false)
 ```
 
 The `{{input}}` placeholder will be replaced with the user's message. Additional placeholders can be defined using the `--arg` flag.
+
+### Template-Specific Settings
+
+- **model**: Override the default model for this specific prompt
+- **web_search**: Enable or disable web search for this prompt, useful for templates that always need real-time information
 
 ### Multiple Prompt Directories
 
@@ -238,39 +245,72 @@ LLMC supports web search functionality using native API features from both OpenA
 
 ### Enabling Web Search
 
-**Method 1: Command-line flag (per-query)**
+Web search can be enabled through multiple methods with the following priority order (higher priority overrides lower):
+
+**1. Command-line flag (highest priority, per-query)**
 ```bash
 # Enable web search for a single query
 llmc chat --web-search "What are the latest developments in quantum computing?"
 
-# Combine with other flags
-llmc chat --web-search --model gpt-4o "Latest news about SpaceX"
+# Disable web search even if enabled in other configurations
+llmc chat --web-search=false "Historical question"
 ```
 
-**Method 2: Configuration file (default behavior)**
+**2. Environment variable (session-wide)**
+```bash
+export LLMC_ENABLE_WEB_SEARCH=true
+llmc chat "Latest news about SpaceX"
+```
+
+**3. Prompt template (template-specific)**
+```toml
+# In your prompt template file (e.g., research.toml)
+system = "You are a research assistant with access to real-time information"
+user = "{{input}}"
+web_search = true  # This template always uses web search
+```
+
+```bash
+llmc chat --prompt research "Current state of AI research"
+```
+
+**4. Configuration file (default behavior)**
 ```toml
 # In $HOME/.config/llmc/config.toml
 enable_web_search = true
 ```
 
-**Method 3: Environment variable**
+### Priority Examples
+
 ```bash
+# Example 1: Command-line flag overrides all
 export LLMC_ENABLE_WEB_SEARCH=true
+llmc chat --prompt research --web-search=false "question"
+# Result: Web search is DISABLED (flag takes priority)
+
+# Example 2: Environment variable overrides template
+export LLMC_ENABLE_WEB_SEARCH=false
+llmc chat --prompt research "question"  # research.toml has web_search=true
+# Result: Web search is DISABLED (env var takes priority)
+
+# Example 3: Template overrides config file
+# config.toml has enable_web_search=false
+llmc chat --prompt research "question"  # research.toml has web_search=true
+# Result: Web search is ENABLED (template takes priority)
 ```
 
 ### Provider-Specific Details
 
 **OpenAI (Responses API)**
 - Uses OpenAI's Responses API with the `web_search` tool
-- **Supported models only**: gpt-4o, gpt-4.1, o3, o4-mini, gpt-5 series
-- **Important**: Older models like gpt-3.5-turbo are not supported with Responses API
+- Supported with recent OpenAI models (e.g., gpt-4o, o-series)
 - If you use an unsupported model, you'll receive a helpful error message with suggestions
-- Pricing: $30 per 1,000 queries for gpt-4o search, $25 for gpt-4o-mini search
+- Search pricing applies per query (check OpenAI's pricing page for current rates)
 
 **Gemini (Google Search Grounding)**
 - Uses Gemini's built-in `google_search` tool with grounding
-- **All current Gemini models supported**: gemini-2.0-flash, gemini-2.5-pro, etc.
-- Billing started January 5, 2026: $14 per 1,000 search queries
+- Supported with current Gemini models (e.g., gemini-2.0-flash, gemini-2.5-pro)
+- Search pricing applies per query (check Google's pricing page for current rates)
 
 ### Citation Format
 
@@ -309,36 +349,42 @@ llmc config websearch
 llmc config
 ```
 
+## Configuration Priority
+
+All configuration settings follow the same priority order:
+
+1. **Command-line flags** (highest priority)
+2. **Environment variables** (with `LLMC_` prefix)
+3. **Prompt template** (for `model` and `web_search` only)
+4. **Configuration file** (`~/.config/llmc/config.toml`)
+5. **Default values** (lowest priority)
+
+### Example: Model Selection Priority
+
+```bash
+# Priority demonstration for model selection
+export LLMC_MODEL="gpt-4o-mini"
+
+# Scenario 1: Command-line flag wins
+llmc chat --model gpt-4o "Hello"
+# Uses: gpt-4o (from flag)
+
+# Scenario 2: Environment variable used
+llmc chat "Hello"
+# Uses: gpt-4o-mini (from env var)
+
+# Scenario 3: Prompt template overrides config but not env var
+llmc chat --prompt example "Hello"  # example.toml has model="o3"
+# Uses: gpt-4o-mini (env var takes priority over template)
+```
+
 ## Model Compatibility
 
-### OpenAI Models
+LLMC uses provider-specific APIs:
 
-LLMC uses OpenAI's Responses API, which supports the following models:
-- **gpt-4o** series (gpt-4o, gpt-4o-mini)
-- **gpt-4.1** series (gpt-4.1, gpt-4.1-mini, gpt-4.1-nano)
-- **o-series** reasoning models (o3, o4-mini)
-- **gpt-5** series (gpt-5, gpt-5.1, gpt-5.2)
+**OpenAI**: Uses Responses API. Recent models like gpt-4o and o-series are supported. If you use an unsupported model, you'll receive a helpful error message.
 
-**Note**: Older models like gpt-3.5-turbo are not supported. If you attempt to use an unsupported model, you'll receive a clear error message:
-
-```
-Error: Model 'gpt-3.5-turbo' is not supported with Responses API.
-
-Supported models: gpt-4o, gpt-4.1, o3, o4-mini, gpt-5 series
-
-Please change your model with --model flag or in config file.
-Example: llmc chat --model gpt-4o "your question"
-```
-
-### Gemini Models
-
-All current Gemini models are supported, including:
-- gemini-2.0-flash (default)
-- gemini-2.5-pro
-- gemini-2.5-flash
-- gemini-2.5-flash-lite
-- gemini-1.5-pro
-- gemini-1.5-flash
+**Gemini**: All current Gemini models are supported (e.g., gemini-2.0-flash, gemini-2.5-pro).
 
 ## Debug Mode
 
