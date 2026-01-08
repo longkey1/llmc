@@ -178,7 +178,7 @@ echo "Hello, how are you?" | llmc chat
 # Use default editor (from EDITOR environment variable)
 llmc chat -e
 
-# List available models
+# List available models (fetches from API)
 llmc models
 ```
 
@@ -513,7 +513,7 @@ llmc chat --prompt example "Hello"  # example.toml has model="o3"
 
 ## Listing Available Models
 
-View all available models for each provider:
+View all available models for each provider by fetching real-time data from their APIs:
 
 ```bash
 # List models for the currently configured provider
@@ -524,20 +524,48 @@ llmc models openai
 llmc models gemini
 ```
 
+**Note**: This command requires a valid API token to be configured for the provider.
+
 The output shows:
 - **MODEL ID**: The identifier to use with `--model` flag
-- **DEFAULT**: Indicates which model is used when none is specified
-- **DESCRIPTION**: Brief description of each model
+- **DEFAULT**: Indicates which model is currently configured (marked as "Yes")
+- **DESCRIPTION**:
+  - For OpenAI: Model creation date in JST (e.g., "Created: 2024-05-13 12:00:00 JST")
+  - For Gemini: Detailed model description from the API
+
+### Example Output
+
+**OpenAI:**
+```
+Available models for openai:
+
+MODEL ID      DEFAULT    DESCRIPTION
+------------  ---------  ----------------------------------
+gpt-4o        Yes        Created: 2024-05-13 12:00:00 JST
+gpt-4o-mini              Created: 2024-07-18 12:00:00 JST
+```
+
+**Gemini:**
+```
+Available models for gemini:
+
+MODEL ID           DEFAULT    DESCRIPTION
+-----------------  ---------  --------------------------------------------------
+gemini-2.5-flash   Yes        Stable version of Gemini 2.5 Flash, our mid-size...
+gemini-2.5-pro                Stable release (June 17th, 2025) of Gemini 2.5 Pro
+```
+
+The models list is fetched directly from each provider's API, ensuring you always see the most up-to-date available models. Models are automatically sorted by ID for easy reference.
 
 ## Model Compatibility
 
 LLMC uses provider-specific APIs:
 
-**OpenAI**: Uses Responses API with support for recent models. Use `llmc models openai` to see the complete list of supported models.
+**OpenAI**: Uses Responses API with support for GPT-4, GPT-5, and O-series models (o3, o4). The `llmc models openai` command fetches the latest available models from OpenAI's API, filtered to show only compatible models with Responses API.
 
-**Gemini**: Supports current Gemini models. Use `llmc models gemini` to see the complete list of supported models.
+**Gemini**: Supports all Gemini models that support the `generateContent` method. The `llmc models gemini` command fetches the latest available models from Google's Gemini API.
 
-If you use an unsupported model, you'll receive a helpful error message with suggestions.
+The models list is dynamically retrieved from each provider's API, so you'll always see the most current available models without needing to update the tool. If you use an unsupported model, you'll receive a helpful error message with suggestions.
 
 ## Debug Mode
 
