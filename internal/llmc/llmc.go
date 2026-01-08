@@ -110,6 +110,7 @@ func ResolvePath(path string) (string, error) {
 type Provider interface {
 	Chat(message string) (string, error)
 	SetWebSearch(enabled bool)
+	SetIgnoreWebSearchErrors(enabled bool)
 	SetDebug(enabled bool)
 	ListModels() ([]ModelInfo, error)
 }

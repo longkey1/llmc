@@ -16,13 +16,14 @@ import (
 )
 
 var (
-	provider  string
-	model     string
-	baseURL   string
-	prompt    string
-	argFlags  []string
-	useEditor bool
-	webSearch bool
+	provider              string
+	model                 string
+	baseURL               string
+	prompt                string
+	argFlags              []string
+	useEditor             bool
+	webSearch             bool
+	ignoreWebSearchErrors bool
 )
 
 // chatCmd represents the chat command
@@ -159,6 +160,7 @@ web_search = true  # Optional: enables web search for this prompt"`,
 			}
 		}
 		llmProvider.SetWebSearch(enableWebSearch)
+		llmProvider.SetIgnoreWebSearchErrors(ignoreWebSearchErrors)
 		llmProvider.SetDebug(verbose)
 
 		// Send message and print response
@@ -216,4 +218,5 @@ func init() {
 	chatCmd.Flags().StringArrayVar(&argFlags, "arg", []string{}, "Key-value pairs for prompt template (format: key:value)")
 	chatCmd.Flags().BoolVarP(&useEditor, "editor", "e", false, "Use default editor (from EDITOR environment variable) to compose message")
 	chatCmd.Flags().BoolVar(&webSearch, "web-search", false, "Enable web search for real-time information")
+	chatCmd.Flags().BoolVar(&ignoreWebSearchErrors, "ignore-web-search-errors", false, "Automatically retry without web search if web search fails to return a response")
 }

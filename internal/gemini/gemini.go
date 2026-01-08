@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"sort"
 	"strings"
 
@@ -88,9 +89,15 @@ type GeminiResponsePart struct {
 
 // GeminiGroundingMetadata contains grounding information
 type GeminiGroundingMetadata struct {
+	SearchEntryPoint   *GeminiSearchEntryPoint `json:"searchEntryPoint,omitempty"`
 	WebSearchQueries   []string                `json:"webSearchQueries,omitempty"`
 	GroundingChunks    []GeminiGroundingChunk  `json:"groundingChunks,omitempty"`
 	GroundingSupports  []GeminiGroundingSupport `json:"groundingSupports,omitempty"`
+}
+
+// GeminiSearchEntryPoint contains search entry point information
+type GeminiSearchEntryPoint struct {
+	RenderedContent string `json:"renderedContent,omitempty"`
 }
 
 // GeminiGroundingChunk represents a grounding source
@@ -126,23 +133,30 @@ type Config interface {
 
 // Provider implements the llmc.Provider interface for Gemini
 type Provider struct {
-	config           Config
-	webSearchEnabled bool
-	debug            bool
+	config                 Config
+	webSearchEnabled       bool
+	ignoreWebSearchErrors  bool
+	debug                  bool
 }
 
 // NewProvider creates a new Gemini provider instance
 func NewProvider(config Config) *Provider {
 	return &Provider{
-		config:           config,
-		webSearchEnabled: false,
-		debug:            false,
+		config:                config,
+		webSearchEnabled:      false,
+		ignoreWebSearchErrors: false,
+		debug:                 false,
 	}
 }
 
 // SetWebSearch enables or disables web search
 func (p *Provider) SetWebSearch(enabled bool) {
 	p.webSearchEnabled = enabled
+}
+
+// SetIgnoreWebSearchErrors enables or disables ignoring web search errors (auto-retry without web search)
+func (p *Provider) SetIgnoreWebSearchErrors(enabled bool) {
+	p.ignoreWebSearchErrors = enabled
 }
 
 // SetDebug enables or disables debug mode
@@ -244,6 +258,28 @@ func contains(slice []string, item string) bool {
 
 // Chat sends a message to Gemini's API and returns the response
 func (p *Provider) Chat(message string) (string, error) {
+	response, retry, err := p.sendRequest(message, p.webSearchEnabled)
+
+	// If web search was enabled but returned empty response
+	if retry && p.webSearchEnabled {
+		// If ignoreWebSearchErrors is enabled, retry without web search
+		if p.ignoreWebSearchErrors {
+			if p.debug {
+				fmt.Fprintf(os.Stderr, "Web search returned empty response, retrying without web search...\n")
+			}
+			response, _, err = p.sendRequest(message, false)
+		} else {
+			// Otherwise, return an error
+			return "", fmt.Errorf("web search did not return a text response (known Gemini API issue). Use --ignore-web-search-errors to automatically retry without web search")
+		}
+	}
+
+	return response, err
+}
+
+// sendRequest sends a request to Gemini's API and returns the response
+// Returns: (response text, should retry without web search, error)
+func (p *Provider) sendRequest(message string, enableWebSearch bool) (string, bool, error) {
 	// Prepare the request body
 	reqBody := GeminiRequest{
 		Contents: []GeminiContent{
@@ -258,7 +294,7 @@ func (p *Provider) Chat(message string) (string, error) {
 	}
 
 	// Add Google Search tool if enabled
-	if p.webSearchEnabled {
+	if enableWebSearch {
 		reqBody.Tools = []GeminiTool{
 			{
 				GoogleSearch: &GeminiGoogleSearch{},
@@ -269,7 +305,7 @@ func (p *Provider) Chat(message string) (string, error) {
 	// Convert request body to JSON
 	jsonData, err := json.Marshal(reqBody)
 	if err != nil {
-		return "", fmt.Errorf("error marshaling request: %v", err)
+		return "", false, fmt.Errorf("error marshaling request: %v", err)
 	}
 
 	// Create HTTP request
@@ -280,7 +316,7 @@ func (p *Provider) Chat(message string) (string, error) {
 	url := fmt.Sprintf("%s/models/%s:generateContent?key=%s", baseURL, p.config.GetModel(), p.config.GetToken())
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonData))
 	if err != nil {
-		return "", fmt.Errorf("error creating request: %v", err)
+		return "", false, fmt.Errorf("error creating request: %v", err)
 	}
 
 	// Set headers
@@ -290,42 +326,86 @@ func (p *Provider) Chat(message string) (string, error) {
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("error sending request: %v", err)
+		return "", false, fmt.Errorf("error sending request: %v", err)
 	}
 	defer resp.Body.Close()
 
 	// Read response body
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return "", fmt.Errorf("error reading response: %v", err)
+		return "", false, fmt.Errorf("error reading response: %v", err)
 	}
 
 	// Check for error response
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("API error: %s", string(body))
+		if p.debug {
+			return "", false, fmt.Errorf("API error (HTTP %d): %s", resp.StatusCode, string(body))
+		}
+		return "", false, fmt.Errorf("API error: %s", string(body))
+	}
+
+	// Debug: print raw response
+	if p.debug {
+		fmt.Fprintf(os.Stderr, "Raw API response: %s\n", string(body))
 	}
 
 	// Parse response
 	var result GeminiResponse
 	if err := json.Unmarshal(body, &result); err != nil {
-		return "", fmt.Errorf("error parsing response: %v", err)
+		if p.debug {
+			return "", false, fmt.Errorf("error parsing response: %v\nRaw response: %s", err, string(body))
+		}
+		return "", false, fmt.Errorf("error parsing response: %v", err)
 	}
 
-	if len(result.Candidates) == 0 || len(result.Candidates[0].Content.Parts) == 0 {
-		return "", fmt.Errorf("no response from API")
+	// Debug: print parsed response structure
+	if p.debug {
+		fmt.Fprintf(os.Stderr, "Candidates count: %d\n", len(result.Candidates))
+		if len(result.Candidates) > 0 {
+			fmt.Fprintf(os.Stderr, "Parts count in first candidate: %d\n", len(result.Candidates[0].Content.Parts))
+		}
 	}
 
-	responseText := result.Candidates[0].Content.Parts[0].Text
+	if len(result.Candidates) == 0 {
+		if p.debug {
+			return "", false, fmt.Errorf("no response from API (empty candidates)\nRaw response: %s", string(body))
+		}
+		return "", false, fmt.Errorf("no response from API")
+	}
+
+	var responseText string
+	shouldRetry := false
+
+	// Check if there's text content in parts
+	if len(result.Candidates[0].Content.Parts) > 0 {
+		responseText = result.Candidates[0].Content.Parts[0].Text
+	}
+
+	// If no text content but grounding metadata exists, mark for retry
+	if responseText == "" && result.GroundingMetadata != nil && enableWebSearch {
+		shouldRetry = true
+		if p.debug {
+			fmt.Fprintf(os.Stderr, "Empty response with grounding metadata detected (known Gemini API issue)\n")
+		}
+	}
+
+	// If still no content and shouldn't retry, return error
+	if responseText == "" && !shouldRetry {
+		if p.debug {
+			return "", false, fmt.Errorf("no response from API (empty parts)\nRaw response: %s", string(body))
+		}
+		return "", false, fmt.Errorf("no response from API")
+	}
 
 	// Format citations if grounding metadata is present
-	if result.GroundingMetadata != nil && len(result.GroundingMetadata.GroundingChunks) > 0 {
+	if responseText != "" && result.GroundingMetadata != nil && len(result.GroundingMetadata.GroundingChunks) > 0 {
 		citations := extractGroundingCitations(result.GroundingMetadata)
 		if citations != "" {
 			responseText += "\n\n---\nSources:\n" + citations
 		}
 	}
 
-	return responseText, nil
+	return responseText, shouldRetry, nil
 }
 
 // extractGroundingCitations formats grounding chunks into a citation list

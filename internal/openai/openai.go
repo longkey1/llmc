@@ -105,6 +105,11 @@ func (p *Provider) SetWebSearch(enabled bool) {
 	p.webSearchEnabled = enabled
 }
 
+// SetIgnoreWebSearchErrors is a no-op for OpenAI (not applicable)
+func (p *Provider) SetIgnoreWebSearchErrors(enabled bool) {
+	// Not applicable for OpenAI
+}
+
 // SetDebug enables or disables debug mode
 func (p *Provider) SetDebug(enabled bool) {
 	p.debug = enabled
