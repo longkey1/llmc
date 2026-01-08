@@ -7,6 +7,8 @@ import (
 	"io"
 	"net/http"
 	"strings"
+
+	"github.com/longkey1/llmc/internal/llmc"
 )
 
 const (
@@ -16,12 +18,12 @@ const (
 )
 
 // Supported models for Responses API
-var responsesAPISupportedModels = []string{
-	"gpt-4o",
-	"gpt-4.1",
-	"o3",
-	"o4-mini",
-	"gpt-5",
+var supportedModels = []llmc.ModelInfo{
+	{ID: "gpt-4o", Description: "GPT-4 Optimized", IsDefault: false},
+	{ID: "gpt-4.1", Description: "Latest GPT-4 series model", IsDefault: true},
+	{ID: "o3", Description: "Reasoning model series 3", IsDefault: false},
+	{ID: "o4-mini", Description: "Compact reasoning model", IsDefault: false},
+	{ID: "gpt-5", Description: "Next generation GPT model", IsDefault: false},
 }
 
 // ResponsesAPIRequest represents the request body for OpenAI's Responses API
@@ -85,10 +87,15 @@ func (p *Provider) SetWebSearch(enabled bool) {
 	p.webSearchEnabled = enabled
 }
 
+// ListModels returns the list of supported models
+func (p *Provider) ListModels() []llmc.ModelInfo {
+	return supportedModels
+}
+
 // isResponsesAPISupported checks if the model is supported by Responses API
 func isResponsesAPISupported(model string) bool {
-	for _, supported := range responsesAPISupportedModels {
-		if strings.HasPrefix(model, supported) {
+	for _, m := range supportedModels {
+		if strings.HasPrefix(model, m.ID) {
 			return true
 		}
 	}

@@ -7,6 +7,8 @@ import (
 	"io"
 	"net/http"
 	"strings"
+
+	"github.com/longkey1/llmc/internal/llmc"
 )
 
 const (
@@ -14,6 +16,14 @@ const (
 	DefaultBaseURL = "https://generativelanguage.googleapis.com/v1beta"
 	DefaultModel   = "gemini-2.0-flash"
 )
+
+// Supported models for Gemini
+var supportedModels = []llmc.ModelInfo{
+	{ID: "gemini-2.0-flash", Description: "Fast and efficient Gemini 2.0", IsDefault: true},
+	{ID: "gemini-2.0-pro", Description: "Advanced Gemini 2.0 for complex tasks", IsDefault: false},
+	{ID: "gemini-1.5-pro", Description: "Previous generation pro model", IsDefault: false},
+	{ID: "gemini-1.5-flash", Description: "Previous generation flash model", IsDefault: false},
+}
 
 // GeminiRequest represents the request body for Gemini's generate content API
 type GeminiRequest struct {
@@ -117,6 +127,11 @@ func NewProvider(config Config) *Provider {
 // SetWebSearch enables or disables web search
 func (p *Provider) SetWebSearch(enabled bool) {
 	p.webSearchEnabled = enabled
+}
+
+// ListModels returns the list of supported models
+func (p *Provider) ListModels() []llmc.ModelInfo {
+	return supportedModels
 }
 
 // Chat sends a message to Gemini's API and returns the response

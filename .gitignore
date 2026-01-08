@@ -31,3 +31,6 @@ pkg/
 .vscode/
 *.swp
 *.swo
+
+# Cache directories
+.cache/

@@ -122,7 +122,7 @@ web_search = true  # Optional: enables web search for this prompt"`,
 		}
 
 		// Select provider (after potential model override)
-		llmProvider, err := llmc.NewProvider(config)
+		llmProvider, err := newProvider(config)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)

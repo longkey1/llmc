@@ -7,8 +7,6 @@ import (
 	"strings"
 
 	"github.com/BurntSushi/toml"
-	"github.com/longkey1/llmc/internal/gemini"
-	"github.com/longkey1/llmc/internal/openai"
 	"github.com/spf13/viper"
 )
 
@@ -20,6 +18,13 @@ type Config struct {
 	Token           string   `toml:"token" mapstructure:"token"`
 	PromptDirs      []string `toml:"prompt_dirs" mapstructure:"prompt_dirs"`
 	EnableWebSearch bool     `toml:"enable_web_search" mapstructure:"enable_web_search"`
+}
+
+// ModelInfo represents information about an available model
+type ModelInfo struct {
+	ID          string
+	Description string
+	IsDefault   bool
 }
 
 // GetModel returns the model name
@@ -40,9 +45,9 @@ func (c *Config) GetToken() string {
 // NewDefaultConfig returns a new Config with default values
 func NewDefaultConfig(promptDir string) *Config {
 	return &Config{
-		Provider:        openai.ProviderName,
-		BaseURL:         openai.DefaultBaseURL,
-		Model:           openai.DefaultModel,
+		Provider:        "openai",
+		BaseURL:         "https://api.openai.com/v1",
+		Model:           "gpt-4.1",
 		Token:           "",
 		PromptDirs:      []string{promptDir},
 		EnableWebSearch: false,
@@ -105,18 +110,7 @@ func ResolvePath(path string) (string, error) {
 type Provider interface {
 	Chat(message string) (string, error)
 	SetWebSearch(enabled bool)
-}
-
-// NewProvider creates a new provider instance based on the configuration
-func NewProvider(config *Config) (Provider, error) {
-	switch config.Provider {
-	case openai.ProviderName:
-		return openai.NewProvider(config), nil
-	case gemini.ProviderName:
-		return gemini.NewProvider(config), nil
-	default:
-		return nil, fmt.Errorf("unsupported provider: %s", config.Provider)
-	}
+	ListModels() []ModelInfo
 }
 
 // Prompt represents the structure of a TOML prompt file
