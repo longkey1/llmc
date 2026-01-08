@@ -12,12 +12,13 @@ import (
 
 // Config holds the configuration for the LLM provider
 type Config struct {
-	Provider        string   `toml:"provider" mapstructure:"provider"`
-	BaseURL         string   `toml:"base_url" mapstructure:"base_url"`
-	Model           string   `toml:"model" mapstructure:"model"`
-	Token           string   `toml:"token" mapstructure:"token"`
-	PromptDirs      []string `toml:"prompt_dirs" mapstructure:"prompt_dirs"`
-	EnableWebSearch bool     `toml:"enable_web_search" mapstructure:"enable_web_search"`
+	Provider              string   `toml:"provider" mapstructure:"provider"`
+	BaseURL               string   `toml:"base_url" mapstructure:"base_url"`
+	Model                 string   `toml:"model" mapstructure:"model"`
+	Token                 string   `toml:"token" mapstructure:"token"`
+	PromptDirs            []string `toml:"prompt_dirs" mapstructure:"prompt_dirs"`
+	EnableWebSearch       bool     `toml:"enable_web_search" mapstructure:"enable_web_search"`
+	IgnoreWebSearchErrors bool     `toml:"ignore_web_search_errors" mapstructure:"ignore_web_search_errors"`
 }
 
 // ModelInfo represents information about an available model
@@ -45,12 +46,13 @@ func (c *Config) GetToken() string {
 // NewDefaultConfig returns a new Config with default values
 func NewDefaultConfig(promptDir string) *Config {
 	return &Config{
-		Provider:        "openai",
-		BaseURL:         "https://api.openai.com/v1",
-		Model:           "gpt-4.1",
-		Token:           "",
-		PromptDirs:      []string{promptDir},
-		EnableWebSearch: false,
+		Provider:              "openai",
+		BaseURL:               "https://api.openai.com/v1",
+		Model:                 "gpt-4.1",
+		Token:                 "",
+		PromptDirs:            []string{promptDir},
+		EnableWebSearch:       false,
+		IgnoreWebSearchErrors: false,
 	}
 }
 

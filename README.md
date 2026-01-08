@@ -71,12 +71,16 @@ llmc config model
 llmc config baseurl
 llmc config token
 llmc config promptdirs
+llmc config websearch
+llmc config ignorewebsearcherrors
 llmc config configfile
 
 # Example outputs:
-# llmc config provider    → openai
-# llmc config model       → gpt-4.1
-# llmc config promptdirs  → /path/to/prompts,/another/prompt/directory
+# llmc config provider                 → openai
+# llmc config model                    → gpt-4.1
+# llmc config promptdirs               → /path/to/prompts,/another/prompt/directory
+# llmc config websearch                → false
+# llmc config ignorewebsearcherrors    → false
 ```
 
 This will display all current configuration values, with the API token masked for security. You can also specify a field name to show only that field's value. The `promptdirs` field displays directories as comma-separated values.
@@ -89,6 +93,7 @@ model = "your-model-name"  # Specify the model you want to use
 token = "your-api-token"
 prompt_dirs = ["/path/to/prompts", "/another/prompt/directory"]  # Multiple directories supported
 enable_web_search = false  # Enable web search by default (default: false)
+ignore_web_search_errors = false  # Automatically retry without web search if it fails (Gemini-specific, default: false)
 ```
 
 #### System-Wide Configuration
@@ -148,6 +153,9 @@ export LLMC_PROMPT_DIRS="/path/to/prompts,/another/prompt/directory"
 
 # Enable web search (true or false)
 export LLMC_ENABLE_WEB_SEARCH=true
+
+# Automatically retry without web search if web search fails (Gemini-specific)
+export LLMC_IGNORE_WEB_SEARCH_ERRORS=true
 ```
 
 You can add these to your shell profile (e.g., `~/.bashrc`, `~/.zshrc`) to make them persistent:
@@ -251,6 +259,9 @@ llmc chat --editor
 
 # Enable web search for real-time information
 llmc chat --web-search "What's the latest news about AI?"
+
+# Automatically retry without web search if Gemini returns empty response
+llmc chat --web-search --ignore-web-search-errors "Your query"
 ```
 
 ### Input Methods
@@ -444,6 +455,39 @@ llmc chat --prompt research "question"  # research.toml has web_search=true
 - Supported with current Gemini models (e.g., gemini-2.0-flash, gemini-2.5-pro)
 - Search pricing applies per query (check Google's pricing page for current rates)
 
+**Known Issue: Gemini Empty Web Search Responses**
+
+**Note**: This issue is specific to Gemini. OpenAI users can ignore the `--ignore-web-search-errors` flag as it has no effect with OpenAI's web search implementation.
+
+Gemini's web search occasionally returns empty responses due to a known API issue. When this happens:
+
+```bash
+# Without the flag: you'll get an error
+llmc chat --web-search "query"
+# Error: web search did not return a text response (known Gemini API issue)...
+
+# With the flag: automatically retries without web search
+llmc chat --web-search --ignore-web-search-errors "query"
+# Automatically retries without web search and returns a response
+```
+
+You can also enable this behavior by default in your configuration file:
+```toml
+# Add to $HOME/.config/llmc/config.toml
+ignore_web_search_errors = true
+```
+
+Or via environment variable:
+```bash
+export LLMC_IGNORE_WEB_SEARCH_ERRORS=true
+```
+
+When verbose mode is enabled (`-v`), you'll see a message when the retry occurs:
+```bash
+llmc -v chat --web-search --ignore-web-search-errors "query"
+# Output: Web search returned empty response, retrying without web search...
+```
+
 ### Citation Format
 
 When web search is enabled, responses include source citations in a consistent format:
@@ -477,7 +521,10 @@ llmc chat -v --web-search "Current stock price of AAPL"
 # Check if web search is enabled in your configuration
 llmc config websearch
 
-# View all configuration including web search setting
+# Check if ignore web search errors is enabled
+llmc config ignorewebsearcherrors
+
+# View all configuration including web search settings
 llmc config
 ```
 

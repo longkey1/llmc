@@ -160,7 +160,32 @@ web_search = true  # Optional: enables web search for this prompt"`,
 			}
 		}
 		llmProvider.SetWebSearch(enableWebSearch)
-		llmProvider.SetIgnoreWebSearchErrors(ignoreWebSearchErrors)
+
+		// Enable ignore web search errors if specified in flag, env, or config file
+		// Priority: command line flag > environment variable > config file
+		var enableIgnoreWebSearchErrors bool
+		envIgnoreWebSearchErrors := os.Getenv("LLMC_IGNORE_WEB_SEARCH_ERRORS")
+
+		if cmd.Flags().Changed("ignore-web-search-errors") {
+			// 1. Command line flag takes highest priority
+			enableIgnoreWebSearchErrors = ignoreWebSearchErrors
+			if verbose {
+				fmt.Fprintf(os.Stderr, "Using ignore web search errors setting from command line flag: %v\n", ignoreWebSearchErrors)
+			}
+		} else if envIgnoreWebSearchErrors != "" {
+			// 2. Environment variable is second priority
+			enableIgnoreWebSearchErrors = envIgnoreWebSearchErrors == "true" || envIgnoreWebSearchErrors == "1"
+			if verbose {
+				fmt.Fprintf(os.Stderr, "Using ignore web search errors setting from environment variable: %v\n", enableIgnoreWebSearchErrors)
+			}
+		} else {
+			// 3. Fall back to config file or default
+			enableIgnoreWebSearchErrors = config.IgnoreWebSearchErrors
+			if verbose && config.IgnoreWebSearchErrors {
+				fmt.Fprintf(os.Stderr, "Using ignore web search errors setting from config file: %v\n", config.IgnoreWebSearchErrors)
+			}
+		}
+		llmProvider.SetIgnoreWebSearchErrors(enableIgnoreWebSearchErrors)
 		llmProvider.SetDebug(verbose)
 
 		// Send message and print response
