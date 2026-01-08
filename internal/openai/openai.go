@@ -19,15 +19,6 @@ const (
 	DefaultModel   = "gpt-4.1"
 )
 
-// Supported models for Responses API (fallback list)
-var supportedModels = []llmc.ModelInfo{
-	{ID: "gpt-4o", Description: "GPT-4 Optimized", IsDefault: false},
-	{ID: "gpt-4.1", Description: "Latest GPT-4 series model", IsDefault: true},
-	{ID: "o3", Description: "Reasoning model series 3", IsDefault: false},
-	{ID: "o4-mini", Description: "Compact reasoning model", IsDefault: false},
-	{ID: "gpt-5", Description: "Next generation GPT model", IsDefault: false},
-}
-
 // ModelsAPIResponse represents the response from OpenAI's models endpoint
 type ModelsAPIResponse struct {
 	Data []ModelData `json:"data"`
@@ -153,26 +144,19 @@ func (p *Provider) fetchModelsFromAPI() ([]llmc.ModelInfo, error) {
 	defaultModel := p.config.GetModel()
 
 	for _, model := range result.Data {
-		// Filter: only include gpt-4, gpt-5, o3, o4 series models
 		id := model.ID
-		if strings.HasPrefix(id, "gpt-4") ||
-		   strings.HasPrefix(id, "gpt-5") ||
-		   strings.HasPrefix(id, "o3") ||
-		   strings.HasPrefix(id, "o4") {
+		isDefault := (id == defaultModel)
 
-			isDefault := (id == defaultModel)
+		// Convert created timestamp to JST and use as description
+		jst := time.FixedZone("Asia/Tokyo", 9*60*60)
+		createdTime := time.Unix(model.Created, 0).In(jst)
+		description := fmt.Sprintf("Created: %s", createdTime.Format("2006-01-02 15:04:05 JST"))
 
-			// Convert created timestamp to JST and use as description
-			jst := time.FixedZone("Asia/Tokyo", 9*60*60)
-			createdTime := time.Unix(model.Created, 0).In(jst)
-			description := fmt.Sprintf("Created: %s", createdTime.Format("2006-01-02 15:04:05 JST"))
-
-			models = append(models, llmc.ModelInfo{
-				ID:          id,
-				Description: description,
-				IsDefault:   isDefault,
-			})
-		}
+		models = append(models, llmc.ModelInfo{
+			ID:          id,
+			Description: description,
+			IsDefault:   isDefault,
+		})
 	}
 
 	// Sort models by ID (descending order)
@@ -183,29 +167,9 @@ func (p *Provider) fetchModelsFromAPI() ([]llmc.ModelInfo, error) {
 	return models, nil
 }
 
-// isResponsesAPISupported checks if the model is supported by Responses API
-func isResponsesAPISupported(model string) bool {
-	for _, m := range supportedModels {
-		if strings.HasPrefix(model, m.ID) {
-			return true
-		}
-	}
-	return false
-}
-
 // Chat sends a message to OpenAI's Responses API and returns the response
 func (p *Provider) Chat(message string) (string, error) {
 	model := p.config.GetModel()
-
-	// Check model compatibility
-	if !isResponsesAPISupported(model) {
-		return "", fmt.Errorf(`Model '%s' is not supported with Responses API.
-
-Supported models: gpt-4o, gpt-4.1, o3, o4-mini, gpt-5 series
-
-Please change your model with --model flag or in config file.
-Example: llmc chat --model gpt-4o "your question"`, model)
-	}
 
 	// Prepare the request body
 	reqBody := ResponsesAPIRequest{

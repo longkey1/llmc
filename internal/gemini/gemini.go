@@ -202,11 +202,6 @@ func (p *Provider) fetchModelsFromAPI() ([]llmc.ModelInfo, error) {
 			continue
 		}
 
-		// Filter: only include gemini models
-		if !strings.HasPrefix(id, "gemini-") {
-			continue
-		}
-
 		isDefault := (id == defaultModel)
 
 		// Use API-provided description or displayName
