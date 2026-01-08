@@ -110,7 +110,8 @@ func ResolvePath(path string) (string, error) {
 type Provider interface {
 	Chat(message string) (string, error)
 	SetWebSearch(enabled bool)
-	ListModels() []ModelInfo
+	SetDebug(enabled bool)
+	ListModels() ([]ModelInfo, error)
 }
 
 // Prompt represents the structure of a TOML prompt file

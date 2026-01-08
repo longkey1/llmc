@@ -46,12 +46,22 @@ type ResponsesAPITool struct {
 
 // ResponsesAPIResponse represents the response from OpenAI's Responses API
 type ResponsesAPIResponse struct {
+	ID     string               `json:"id"`
+	Status string               `json:"status"`
+	Error  *ResponsesAPIError   `json:"error,omitempty"`
 	Output []ResponsesAPIOutput `json:"output"`
+}
+
+// ResponsesAPIError represents an error in the API response
+type ResponsesAPIError struct {
+	Code    string `json:"code"`
+	Message string `json:"message"`
 }
 
 // ResponsesAPIOutput represents an output element
 type ResponsesAPIOutput struct {
-	Content []ResponsesAPIContent `json:"content"`
+	Type    string                `json:"type"`
+	Content []ResponsesAPIContent `json:"content,omitempty"`
 }
 
 // ResponsesAPIContent represents content with text and annotations
@@ -76,15 +86,17 @@ type Config interface {
 
 // Provider implements the llmc.Provider interface for OpenAI
 type Provider struct {
-	config        Config
+	config           Config
 	webSearchEnabled bool
+	debug            bool
 }
 
 // NewProvider creates a new OpenAI provider instance
 func NewProvider(config Config) *Provider {
 	return &Provider{
-		config:        config,
+		config:           config,
 		webSearchEnabled: false,
+		debug:            false,
 	}
 }
 
@@ -93,22 +105,17 @@ func (p *Provider) SetWebSearch(enabled bool) {
 	p.webSearchEnabled = enabled
 }
 
-// ListModels returns the list of supported models from the API
-func (p *Provider) ListModels() []llmc.ModelInfo {
-	models, err := p.fetchModelsFromAPI()
-	if err != nil {
-		// Return empty list on error (caller should handle)
-		return nil
-	}
-	return models
+// SetDebug enables or disables debug mode
+func (p *Provider) SetDebug(enabled bool) {
+	p.debug = enabled
 }
 
-// fetchModelsFromAPI retrieves the list of available models from OpenAI API
-func (p *Provider) fetchModelsFromAPI() ([]llmc.ModelInfo, error) {
+// ListModels returns the list of supported models from the API
+func (p *Provider) ListModels() ([]llmc.ModelInfo, error) {
 	// Create HTTP request
 	req, err := http.NewRequest("GET", p.config.GetBaseURL()+"/models", nil)
 	if err != nil {
-		return nil, fmt.Errorf("error creating request: %v", err)
+		return nil, fmt.Errorf("failed to create request: %v", err)
 	}
 
 	// Set headers
@@ -118,25 +125,34 @@ func (p *Provider) fetchModelsFromAPI() ([]llmc.ModelInfo, error) {
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("error sending request: %v", err)
+		if p.debug {
+			return nil, fmt.Errorf("failed to connect to API: %v", err)
+		}
+		return nil, fmt.Errorf("failed to connect to API. Use --verbose for details")
 	}
 	defer resp.Body.Close()
 
 	// Read response body
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("error reading response: %v", err)
+		return nil, fmt.Errorf("failed to read response: %v", err)
 	}
 
 	// Check for error response
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("API error: %s", string(body))
+		if p.debug {
+			return nil, fmt.Errorf("API request failed (HTTP %d): %s", resp.StatusCode, string(body))
+		}
+		return nil, fmt.Errorf("API request failed (HTTP %d). Use --verbose for details", resp.StatusCode)
 	}
 
 	// Parse response
 	var result ModelsAPIResponse
 	if err := json.Unmarshal(body, &result); err != nil {
-		return nil, fmt.Errorf("error parsing response: %v", err)
+		if p.debug {
+			return nil, fmt.Errorf("failed to parse API response: %v\nRaw response: %s", err, string(body))
+		}
+		return nil, fmt.Errorf("failed to parse API response. Use --verbose for details")
 	}
 
 	// Convert to ModelInfo format
@@ -216,25 +232,67 @@ func (p *Provider) Chat(message string) (string, error) {
 
 	// Check for error response
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("API error: %s", string(body))
+		if p.debug {
+			return "", fmt.Errorf("API request failed (HTTP %d): %s", resp.StatusCode, string(body))
+		}
+		return "", fmt.Errorf("API request failed (HTTP %d). Use --verbose for details", resp.StatusCode)
 	}
 
 	// Parse response
 	var result ResponsesAPIResponse
 	if err := json.Unmarshal(body, &result); err != nil {
-		return "", fmt.Errorf("error parsing response: %v", err)
+		if p.debug {
+			return "", fmt.Errorf("failed to parse API response: %v\nRaw response: %s", err, string(body))
+		}
+		return "", fmt.Errorf("failed to parse API response. Use --verbose for details")
+	}
+
+	// Check for API error in response
+	if result.Error != nil {
+		if p.debug {
+			return "", fmt.Errorf("API error [%s]: %s (id=%s, status=%s)",
+				result.Error.Code, result.Error.Message, result.ID, result.Status)
+		}
+		return "", fmt.Errorf("API error: %s", result.Error.Message)
 	}
 
 	if len(result.Output) == 0 {
-		return "", fmt.Errorf("no response from API")
+		if p.debug {
+			return "", fmt.Errorf("API returned empty response (id=%s, status=%s)\nRaw response: %s",
+				result.ID, result.Status, string(body))
+		}
+		return "", fmt.Errorf("API returned empty response. Use --verbose for details")
 	}
 
-	if len(result.Output[0].Content) == 0 {
-		return "", fmt.Errorf("no content in response")
+	// Find the message output (web_search returns multiple outputs)
+	var messageOutput *ResponsesAPIOutput
+	var outputTypes []string
+	for i := range result.Output {
+		outputTypes = append(outputTypes, result.Output[i].Type)
+		if result.Output[i].Type == "message" {
+			messageOutput = &result.Output[i]
+			break
+		}
+	}
+
+	if messageOutput == nil {
+		if p.debug {
+			return "", fmt.Errorf("no message found in API response (found types: %v)\nRaw response: %s",
+				outputTypes, string(body))
+		}
+		return "", fmt.Errorf("no message found in API response (found: %v). Use --verbose for details", outputTypes)
+	}
+
+	if len(messageOutput.Content) == 0 {
+		if p.debug {
+			return "", fmt.Errorf("message has no content (id=%s, status=%s)\nRaw response: %s",
+				result.ID, result.Status, string(body))
+		}
+		return "", fmt.Errorf("message has no content. Use --verbose for details")
 	}
 
 	// Extract text and citations
-	content := result.Output[0].Content[0]
+	content := messageOutput.Content[0]
 	responseText := content.Text
 
 	// Format citations if present

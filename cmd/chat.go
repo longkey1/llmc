@@ -159,6 +159,7 @@ web_search = true  # Optional: enables web search for this prompt"`,
 			}
 		}
 		llmProvider.SetWebSearch(enableWebSearch)
+		llmProvider.SetDebug(verbose)
 
 		// Send message and print response
 		response, err := llmProvider.Chat(formattedMessage)

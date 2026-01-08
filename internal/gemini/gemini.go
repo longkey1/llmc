@@ -128,6 +128,7 @@ type Config interface {
 type Provider struct {
 	config           Config
 	webSearchEnabled bool
+	debug            bool
 }
 
 // NewProvider creates a new Gemini provider instance
@@ -135,6 +136,7 @@ func NewProvider(config Config) *Provider {
 	return &Provider{
 		config:           config,
 		webSearchEnabled: false,
+		debug:            false,
 	}
 }
 
@@ -143,50 +145,54 @@ func (p *Provider) SetWebSearch(enabled bool) {
 	p.webSearchEnabled = enabled
 }
 
-// ListModels returns the list of supported models from the API
-func (p *Provider) ListModels() []llmc.ModelInfo {
-	models, err := p.fetchModelsFromAPI()
-	if err != nil {
-		// Return empty list on error (caller should handle)
-		return nil
-	}
-	return models
+// SetDebug enables or disables debug mode
+func (p *Provider) SetDebug(enabled bool) {
+	p.debug = enabled
 }
 
-// fetchModelsFromAPI retrieves the list of available models from Gemini API
-func (p *Provider) fetchModelsFromAPI() ([]llmc.ModelInfo, error) {
+// ListModels returns the list of supported models from the API
+func (p *Provider) ListModels() ([]llmc.ModelInfo, error) {
 	// Build URL with API key
 	url := p.config.GetBaseURL() + "/models?key=" + p.config.GetToken()
 
 	// Create HTTP request
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
-		return nil, fmt.Errorf("error creating request: %v", err)
+		return nil, fmt.Errorf("failed to create request: %v", err)
 	}
 
 	// Send request
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("error sending request: %v", err)
+		if p.debug {
+			return nil, fmt.Errorf("failed to connect to API: %v", err)
+		}
+		return nil, fmt.Errorf("failed to connect to API. Use --verbose for details")
 	}
 	defer resp.Body.Close()
 
 	// Read response body
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("error reading response: %v", err)
+		return nil, fmt.Errorf("failed to read response: %v", err)
 	}
 
 	// Check for error response
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("API error: %s", string(body))
+		if p.debug {
+			return nil, fmt.Errorf("API request failed (HTTP %d): %s", resp.StatusCode, string(body))
+		}
+		return nil, fmt.Errorf("API request failed (HTTP %d). Use --verbose for details", resp.StatusCode)
 	}
 
 	// Parse response
 	var result ModelsAPIResponse
 	if err := json.Unmarshal(body, &result); err != nil {
-		return nil, fmt.Errorf("error parsing response: %v", err)
+		if p.debug {
+			return nil, fmt.Errorf("failed to parse API response: %v\nRaw response: %s", err, string(body))
+		}
+		return nil, fmt.Errorf("failed to parse API response. Use --verbose for details")
 	}
 
 	// Convert to ModelInfo format

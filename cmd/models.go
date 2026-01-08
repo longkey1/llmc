@@ -51,16 +51,24 @@ Example:
 
 		// Get models based on provider
 		var models []llmc.ModelInfo
+		var modelsErr error
 		if targetProvider == openai.ProviderName {
 			provider := openai.NewProvider(config)
-			models = provider.ListModels()
+			provider.SetDebug(verbose)
+			models, modelsErr = provider.ListModels()
 		} else if targetProvider == gemini.ProviderName {
 			provider := gemini.NewProvider(config)
-			models = provider.ListModels()
+			provider.SetDebug(verbose)
+			models, modelsErr = provider.ListModels()
+		}
+
+		if modelsErr != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", modelsErr)
+			os.Exit(1)
 		}
 
 		if len(models) == 0 {
-			fmt.Fprintf(os.Stderr, "Error: Failed to retrieve models from API.\n")
+			fmt.Fprintf(os.Stderr, "Error: No models returned from API.\n")
 			fmt.Fprintf(os.Stderr, "Please check your API token and network connection.\n")
 			os.Exit(1)
 		}
