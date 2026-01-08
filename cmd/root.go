@@ -59,38 +59,70 @@ func initConfig() {
 	viper.SetEnvPrefix("LLMC") // Set prefix for environment variables
 	viper.AutomaticEnv()       // read in environment variables that match
 
-	// Determine config directory
-	configDir := ""
-	if cfgFile != "" {
-		// Use config file from the flag.
-		viper.SetConfigFile(cfgFile)
-		configDir = filepath.Dir(cfgFile)
-	} else {
-		// Find home directory.
-		home, err := os.UserHomeDir()
-		cobra.CheckErr(err)
+	// Determine config directory for user config
+	home, err := os.UserHomeDir()
+	cobra.CheckErr(err)
+	userConfigDir := filepath.Join(home, ".config", "llmc")
 
-		// Search config in config directory with name "config" (without extension).
-		configDir = filepath.Join(home, ".config", "llmc")
-		viper.AddConfigPath(configDir)
-		viper.SetConfigType("toml")
-		viper.SetConfigName("config")
+	// Create default config with multiple prompts directories
+	// Note: Later directories in the array take precedence over earlier ones
+	defaultPromptDirs := []string{
+		"/usr/share/llmc/prompts",              // System package prompts (lowest priority)
+		"/usr/local/share/llmc/prompts",        // Local install prompts (low priority)
+		filepath.Join(userConfigDir, "prompts"), // User-specific prompts (highest priority)
 	}
-
-	// Create default config with prompts directory
-	defaultConfig := llmc.NewDefaultConfig(filepath.Join(configDir, "prompts"))
+	defaultConfig := llmc.NewDefaultConfig(filepath.Join(userConfigDir, "prompts"))
 
 	// Set default values from llmc package
 	viper.SetDefault("provider", defaultConfig.Provider)
 	viper.SetDefault("model", defaultConfig.Model)
 	viper.SetDefault("token", defaultConfig.Token)
-	viper.SetDefault("prompt_dirs", defaultConfig.PromptDirs)
+	viper.SetDefault("prompt_dirs", defaultPromptDirs)
 	viper.SetDefault("enable_web_search", defaultConfig.EnableWebSearch)
 
-	// Read config file
-	if err := viper.ReadInConfig(); err != nil {
-		if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
-			fmt.Fprintf(os.Stderr, "Error reading config file: %v\n", err)
+	if cfgFile != "" {
+		// Use config file from the flag.
+		viper.SetConfigFile(cfgFile)
+	} else {
+		// Load system-wide config first (lower priority)
+		systemConfigPaths := []string{
+			"/etc/llmc",
+			"/usr/local/etc/llmc",
+		}
+
+		systemConfigLoaded := false
+		for _, path := range systemConfigPaths {
+			viper.AddConfigPath(path)
+		}
+		viper.SetConfigType("toml")
+		viper.SetConfigName("config")
+
+		// Try to read system-wide config
+		if err := viper.ReadInConfig(); err == nil {
+			systemConfigLoaded = true
+			if verbose {
+				fmt.Fprintln(os.Stderr, "Loaded system-wide config:", viper.ConfigFileUsed())
+			}
+		}
+
+		// Load user config (higher priority) - merge with system config
+		viper.AddConfigPath(userConfigDir)
+		if systemConfigLoaded {
+			// Merge user config on top of system config
+			if err := viper.MergeInConfig(); err != nil {
+				if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
+					fmt.Fprintf(os.Stderr, "Error merging user config file: %v\n", err)
+				}
+			} else if verbose {
+				fmt.Fprintln(os.Stderr, "Merged user config:", viper.ConfigFileUsed())
+			}
+		} else {
+			// No system config, just read user config
+			if err := viper.ReadInConfig(); err != nil {
+				if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
+					fmt.Fprintf(os.Stderr, "Error reading config file: %v\n", err)
+				}
+			}
 		}
 	}
 

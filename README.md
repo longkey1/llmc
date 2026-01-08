@@ -2,19 +2,56 @@
 
 A command-line tool for interacting with various LLM APIs. Currently supports OpenAI and Google's Gemini with built-in web search capabilities.
 
+**Supported Platforms:** Linux and macOS
+
 ## Installation
 
 ```bash
-# Using Go
+# Using Go (installs to $HOME/go/bin or $GOPATH/bin)
 go install github.com/longkey1/llmc@latest
 
 # Or download the latest release from GitHub
 # Visit https://github.com/longkey1/llmc/releases
 ```
 
+### File Locations
+
+After installation, LLMC uses the following directories:
+
+#### Configuration Files
+
+LLMC searches for configuration files in the following order (later files override earlier ones):
+
+1. **System-wide configuration** (optional, searched in order):
+   - `/etc/llmc/config.toml` - Standard system config location
+   - `/usr/local/etc/llmc/config.toml` - Alternative system config location
+2. **User configuration**: `$HOME/.config/llmc/config.toml` - User-specific settings (higher priority)
+3. **Custom configuration**: `--config /path/to/config.toml` - Overrides all other configs
+
+If a system-wide configuration exists, user configuration values will be merged on top of it, allowing users to override specific settings while inheriting others.
+
+#### Prompt Directories
+
+- **Prompt directories** (searched in order, later takes precedence):
+  1. `/usr/share/llmc/prompts` - System package prompts (lowest priority, optional)
+  2. `/usr/local/share/llmc/prompts` - Local install prompts (low priority, optional)
+  3. `$HOME/.config/llmc/prompts` - User-specific prompts (highest priority)
+
+You can add custom prompt directories by editing the `prompt_dirs` array in your configuration file.
+
 ## Configuration
 
+LLMC supports multiple configuration methods with the following priority (higher priority overrides lower):
+
+1. **Command-line flags** (highest priority)
+2. **Environment variables** (with `LLMC_` prefix)
+3. **User configuration file** (`$HOME/.config/llmc/config.toml`)
+4. **System-wide configuration file** (`/etc/llmc/config.toml` or `/usr/local/etc/llmc/config.toml`)
+5. **Default values** (lowest priority)
+
 ### Method 1: Configuration File (Recommended)
+
+#### User Configuration
 
 1. Initialize the configuration:
 ```bash
@@ -54,6 +91,41 @@ prompt_dirs = ["/path/to/prompts", "/another/prompt/directory"]  # Multiple dire
 enable_web_search = false  # Enable web search by default (default: false)
 ```
 
+#### System-Wide Configuration
+
+System administrators can provide organization-wide defaults:
+
+```bash
+# Create system-wide config directory
+sudo mkdir -p /etc/llmc
+
+# Create system-wide configuration
+sudo tee /etc/llmc/config.toml > /dev/null <<EOF
+provider = "openai"
+base_url = "https://api.openai.com/v1"
+model = "gpt-4o"
+# Don't include token in system-wide config - users should set this individually
+# No need to set prompt_dirs - defaults will be used
+enable_web_search = false
+EOF
+```
+
+Users can then override specific settings in their `$HOME/.config/llmc/config.toml`:
+
+```toml
+# Only override what you need - inherits other settings from system config
+token = "your-personal-api-token"
+model = "gpt-4o-mini"  # Override the system default
+```
+
+**Note**: Use verbose mode to see which configuration files are loaded:
+```bash
+llmc -v chat "Hello"
+# Output will show:
+# Loaded system-wide config: /etc/llmc/config.toml
+# Merged user config: /home/user/.config/llmc/config.toml
+```
+
 ### Method 2: Environment Variables
 
 You can also configure the tool using environment variables. Environment variables take precedence over configuration file settings.
@@ -88,7 +160,7 @@ echo 'export LLMC_MODEL="your-model-name"' >> ~/.bashrc
 source ~/.bashrc
 ```
 
-**Note**: Configuration priority is consistent across all settings: command-line flags > environment variables > prompt template (for model and web_search) > configuration file. See the "Configuration Priority" section below for details.
+**Note**: Configuration priority order: command-line flags > environment variables > prompt template (for `model` and `web_search` only) > user configuration file > system-wide configuration file > defaults. See the "Configuration Priority" section below for details.
 
 **Note**: Prompt directories in environment variables use comma (`,`) as separator.
 
@@ -108,6 +180,22 @@ llmc chat -e
 ```
 
 ### Using Prompts
+
+#### Default Prompt Directories
+
+LLMC searches for prompts in multiple directories with the following priority:
+
+1. **`/usr/share/llmc/prompts`** - System package prompts (lowest priority)
+   - Used when LLMC is installed via package manager (apt, yum, etc.)
+   - Requires administrator privileges to create/modify
+2. **`/usr/local/share/llmc/prompts`** - Local install prompts (low priority)
+   - Used when LLMC is installed via `go install` or manual build
+   - Requires administrator privileges to create/modify
+3. **`$HOME/.config/llmc/prompts`** - User-specific prompts (highest priority)
+   - Takes precedence over all system prompts
+   - Can override system prompts by using the same filename
+
+#### Creating Prompts
 
 Create a prompt file (e.g., `$HOME/.config/llmc/prompts/example.toml`):
 ```toml
@@ -223,21 +311,62 @@ The `{{input}}` placeholder will be replaced with the user's message. Additional
 
 ### Multiple Prompt Directories
 
-When you have multiple prompt directories configured, the tool searches for prompt files in the order specified in your configuration. If the same prompt file name exists in multiple directories, the file from the later directory will be used (later directories take precedence over earlier ones).
+#### Default Behavior
 
-For example, if your configuration has:
+By default, LLMC searches in three directories:
+```toml
+prompt_dirs = [
+  "/usr/share/llmc/prompts",            # System package (lowest priority)
+  "/usr/local/share/llmc/prompts",      # Local install (low priority)
+  "$HOME/.config/llmc/prompts"          # User-specific (highest priority)
+]
+```
+
+Later directories in the array take precedence. If a prompt file with the same name exists in multiple directories, the file from the later directory will be used.
+
+#### Custom Configuration
+
+You can configure additional directories in your configuration file:
 ```toml
 prompt_dirs = ["/path/to/dir1", "/path/to/dir2", "/path/to/dir3"]
 ```
 
-And both `/path/to/dir1/example.toml` and `/path/to/dir3/example.toml` exist, the tool will use `/path/to/dir3/example.toml`.
+**Priority Rules:**
+- Later directories override earlier ones
+- If `/path/to/dir1/example.toml` and `/path/to/dir3/example.toml` both exist, the tool uses `/path/to/dir3/example.toml`
 
-You can use the `--verbose` flag with the `prompt` command to see warnings about duplicate files:
+#### System Administrator Setup
+
+To provide organization-wide prompts, choose the appropriate location based on installation method:
+
+**For `go install` or manual builds:**
+```bash
+# Create local install prompt directory
+sudo mkdir -p /usr/local/share/llmc/prompts
+
+# Add sample prompts
+sudo cp your-prompts/*.toml /usr/local/share/llmc/prompts/
+```
+
+**For package manager installations:**
+```bash
+# Create system package prompt directory
+sudo mkdir -p /usr/share/llmc/prompts
+
+# Add sample prompts
+sudo cp your-prompts/*.toml /usr/share/llmc/prompts/
+```
+
+Users can then override these by creating files with the same names in their `$HOME/.config/llmc/prompts` directory.
+
+#### Viewing Prompt Locations
+
+Use the `--verbose` flag to see which file will be used for each prompt:
 ```bash
 llmc prompt --verbose
 ```
 
-The prompt list will show the full file path for each prompt, making it easy to see which directory each prompt comes from.
+The prompt list shows the full file path for each prompt, making it easy to see which directory each prompt comes from.
 
 ## Web Search Support
 
@@ -288,15 +417,15 @@ export LLMC_ENABLE_WEB_SEARCH=true
 llmc chat --prompt research --web-search=false "question"
 # Result: Web search is DISABLED (flag takes priority)
 
-# Example 2: Environment variable overrides template
+# Example 2: Environment variable overrides template and config
 export LLMC_ENABLE_WEB_SEARCH=false
 llmc chat --prompt research "question"  # research.toml has web_search=true
-# Result: Web search is DISABLED (env var takes priority)
+# Result: Web search is DISABLED (env var takes priority over template and config)
 
-# Example 3: Template overrides config file
+# Example 3: Template overrides config files
 # config.toml has enable_web_search=false
 llmc chat --prompt research "question"  # research.toml has web_search=true
-# Result: Web search is ENABLED (template takes priority)
+# Result: Web search is ENABLED (template takes priority over config files)
 ```
 
 ### Provider-Specific Details
@@ -356,8 +485,9 @@ All configuration settings follow the same priority order:
 1. **Command-line flags** (highest priority)
 2. **Environment variables** (with `LLMC_` prefix)
 3. **Prompt template** (for `model` and `web_search` only)
-4. **Configuration file** (`~/.config/llmc/config.toml`)
-5. **Default values** (lowest priority)
+4. **User configuration file** (`$HOME/.config/llmc/config.toml`)
+5. **System-wide configuration file** (`/etc/llmc/config.toml` or `/usr/local/etc/llmc/config.toml`)
+6. **Default values** (lowest priority)
 
 ### Example: Model Selection Priority
 
@@ -373,9 +503,9 @@ llmc chat --model gpt-4o "Hello"
 llmc chat "Hello"
 # Uses: gpt-4o-mini (from env var)
 
-# Scenario 3: Prompt template overrides config but not env var
+# Scenario 3: Prompt template overrides config files but not env var
 llmc chat --prompt example "Hello"  # example.toml has model="o3"
-# Uses: gpt-4o-mini (env var takes priority over template)
+# Uses: gpt-4o-mini (env var takes priority over template and config files)
 ```
 
 ## Model Compatibility
