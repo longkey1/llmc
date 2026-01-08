@@ -16,18 +16,16 @@ import (
 
 // modelsCmd represents the models command
 var modelsCmd = &cobra.Command{
-	Use:   "models [provider]",
-	Short: "List available models for the provider",
-	Long: `List all available models for the specified provider.
-If no provider is specified, lists models for the currently configured provider.
+	Use:   "models",
+	Short: "List available models for the configured provider",
+	Long: `List all available models for the currently configured provider.
+Fetches the latest model information directly from the provider's API.
 
-Available providers: openai, gemini
+The command uses the provider configured in your config file or via environment variables.
 
-Examples:
-  llmc models           # List models for the configured provider
-  llmc models openai    # List OpenAI models
-  llmc models gemini    # List Gemini models`,
-	Args: cobra.MaximumNArgs(1),
+Example:
+  llmc models           # List models for the configured provider`,
+	Args: cobra.NoArgs,
 	Run: func(cmd *cobra.Command, args []string) {
 		// Load configuration
 		config, err := llmc.LoadConfig()
@@ -36,16 +34,14 @@ Examples:
 			os.Exit(1)
 		}
 
-		// Determine target provider (use configured provider if no arg)
+		// Use configured provider
 		targetProvider := config.Provider
-		if len(args) > 0 {
-			targetProvider = args[0]
-		}
 
 		// Validate provider
 		if targetProvider != openai.ProviderName && targetProvider != gemini.ProviderName {
 			fmt.Fprintf(os.Stderr, "Error: unsupported provider '%s'\n", targetProvider)
-			fmt.Fprintf(os.Stderr, "Available providers: openai, gemini\n")
+			fmt.Fprintf(os.Stderr, "Supported providers: openai, gemini\n")
+			fmt.Fprintf(os.Stderr, "Please configure a valid provider in your config file or via LLMC_PROVIDER environment variable.\n")
 			os.Exit(1)
 		}
 

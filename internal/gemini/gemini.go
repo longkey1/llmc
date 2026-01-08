@@ -223,9 +223,9 @@ func (p *Provider) fetchModelsFromAPI() ([]llmc.ModelInfo, error) {
 		})
 	}
 
-	// Sort models by ID
+	// Sort models by ID (descending order)
 	sort.Slice(models, func(i, j int) bool {
-		return models[i].ID < models[j].ID
+		return models[i].ID > models[j].ID
 	})
 
 	return models, nil
