@@ -1,4 +1,4 @@
-# LLMC - Command Line LLM Client
+# LLMC - Simple Command Line LLM Client
 
 A command-line tool for interacting with various LLM APIs. Currently supports OpenAI and Google's Gemini with built-in web search capabilities.
 
@@ -89,8 +89,8 @@ This will display all current configuration values, with the API tokens masked f
 ```toml
 model = "openai:gpt-4.1"  # Format: provider:model (e.g., openai:gpt-4, gemini:gemini-2.0-flash)
 base_url = "https://api.openai.com/v1"  # Optional: Override default base URL
-openai_token = "$OPENAI_API_KEY"  # Use $ENV_VAR_NAME to reference environment variable, or set token directly
-gemini_token = "$GEMINI_API_KEY"  # Configure tokens for each provider
+openai_token = "$OPENAI_API_KEY"  # Use $VAR or ${VAR} to reference environment variable, or set token directly
+gemini_token = "${GEMINI_API_KEY}"  # Both $VAR and ${VAR} syntax are supported
 prompt_dirs = ["/path/to/prompts", "/another/prompt/directory"]  # Multiple directories supported
 enable_web_search = false  # Enable web search by default (default: false)
 ignore_web_search_errors = false  # Automatically retry without web search if it fails (Gemini-specific, default: false)

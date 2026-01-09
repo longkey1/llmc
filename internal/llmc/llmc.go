@@ -51,7 +51,7 @@ func (c *Config) GetModelName() (string, error) {
 }
 
 // GetToken returns the token for the specified provider
-// Resolves environment variable if value starts with "$"
+// Resolves environment variable if value starts with "$" or "${"
 func (c *Config) GetToken(provider string) (string, error) {
 	var tokenValue string
 	switch provider {
@@ -65,7 +65,16 @@ func (c *Config) GetToken(provider string) (string, error) {
 
 	// Check if it's an environment variable reference
 	if strings.HasPrefix(tokenValue, "$") {
-		envVarName := strings.TrimPrefix(tokenValue, "$")
+		var envVarName string
+		// Support both $VAR and ${VAR} syntax
+		if strings.HasPrefix(tokenValue, "${") && strings.HasSuffix(tokenValue, "}") {
+			// Extract variable name from ${VAR} format
+			envVarName = tokenValue[2 : len(tokenValue)-1]
+		} else {
+			// Extract variable name from $VAR format
+			envVarName = strings.TrimPrefix(tokenValue, "$")
+		}
+
 		envValue := os.Getenv(envVarName)
 		if envValue == "" {
 			return "", fmt.Errorf("environment variable %s is not set or empty", envVarName)
