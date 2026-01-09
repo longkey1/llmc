@@ -67,7 +67,8 @@ llmc config
 
 # Show specific field only
 llmc config model
-llmc config baseurl
+llmc config openai_base_url
+llmc config gemini_base_url
 llmc config openai_token
 llmc config gemini_token
 llmc config promptdirs
@@ -77,6 +78,8 @@ llmc config configfile
 
 # Example outputs:
 # llmc config model                    → openai:gpt-4.1
+# llmc config openai_base_url          → https://api.openai.com/v1
+# llmc config gemini_base_url          → https://generativelanguage.googleapis.com/v1beta
 # llmc config openai_token             → sk-...
 # llmc config promptdirs               → /path/to/prompts,/another/prompt/directory
 # llmc config websearch                → false
@@ -88,8 +91,9 @@ This will display all current configuration values, with the API tokens masked f
 3. Edit the configuration file to set your API keys and preferences:
 ```toml
 model = "openai:gpt-4.1"  # Format: provider:model (e.g., openai:gpt-4, gemini:gemini-2.0-flash)
-base_url = "https://api.openai.com/v1"  # Optional: Override default base URL
+openai_base_url = "https://api.openai.com/v1"  # Optional: Override default OpenAI base URL
 openai_token = "$OPENAI_API_KEY"  # Use $VAR or ${VAR} to reference environment variable, or set token directly
+gemini_base_url = "https://generativelanguage.googleapis.com/v1beta"  # Optional: Override default Gemini base URL
 gemini_token = "${GEMINI_API_KEY}"  # Both $VAR and ${VAR} syntax are supported
 prompt_dirs = ["/path/to/prompts", "/another/prompt/directory"]  # Multiple directories supported
 enable_web_search = false  # Enable web search by default (default: false)
@@ -107,7 +111,8 @@ sudo mkdir -p /etc/llmc
 # Create system-wide configuration
 sudo tee /etc/llmc/config.toml > /dev/null <<EOF
 model = "openai:gpt-4o"
-base_url = "https://api.openai.com/v1"
+openai_base_url = "https://api.openai.com/v1"
+gemini_base_url = "https://generativelanguage.googleapis.com/v1beta"
 # Don't include tokens in system-wide config - users should set these individually
 # No need to set prompt_dirs - defaults will be used
 enable_web_search = false
@@ -138,8 +143,9 @@ You can also configure the tool using environment variables. Environment variabl
 # Set model (format: provider:model)
 export LLMC_MODEL="openai:gpt-4"
 
-# Set API base URL (optional)
-export LLMC_BASE_URL="https://api.openai.com/v1"
+# Set API base URLs (optional, provider-specific)
+export LLMC_OPENAI_BASE_URL="https://api.openai.com/v1"
+export LLMC_GEMINI_BASE_URL="https://generativelanguage.googleapis.com/v1beta"
 
 # Set API tokens (configure for the providers you use)
 export LLMC_OPENAI_TOKEN="your-openai-api-token"
@@ -238,8 +244,9 @@ llmc chat --prompt example "What is the capital of France?"
 llmc chat --model openai:gpt-4 "Hello"
 llmc chat -m gemini:gemini-2.0-flash "Hello"
 
-# Specify base URL
-llmc chat --base-url "https://api.openai.com/v1" "Hello"
+# Override base URL for the current provider
+llmc chat --model openai:gpt-4 --base-url "https://custom-openai-api.example.com/v1" "Hello"
+llmc chat --model gemini:gemini-2.0-flash --base-url "https://custom-gemini-api.example.com/v1beta" "Hello"
 
 # Use prompt template
 llmc chat --prompt example "Hello"

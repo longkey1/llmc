@@ -8,9 +8,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/longkey1/llmc/internal/gemini"
 	"github.com/longkey1/llmc/internal/llmc"
-	"github.com/longkey1/llmc/internal/openai"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -75,13 +73,17 @@ func initConfig() {
 
 	// Set default values from llmc package
 	viper.SetDefault("model", defaultConfig.Model)
+	viper.SetDefault("openai_base_url", defaultConfig.OpenAIBaseURL)
 	viper.SetDefault("openai_token", defaultConfig.OpenAIToken)
+	viper.SetDefault("gemini_base_url", defaultConfig.GeminiBaseURL)
 	viper.SetDefault("gemini_token", defaultConfig.GeminiToken)
 	viper.SetDefault("prompt_dirs", defaultPromptDirs)
 	viper.SetDefault("enable_web_search", defaultConfig.EnableWebSearch)
 
 	// Bind environment variables
+	viper.BindEnv("openai_base_url", "LLMC_OPENAI_BASE_URL")
 	viper.BindEnv("openai_token", "LLMC_OPENAI_TOKEN")
+	viper.BindEnv("gemini_base_url", "LLMC_GEMINI_BASE_URL")
 	viper.BindEnv("gemini_token", "LLMC_GEMINI_TOKEN")
 
 	if cfgFile != "" {
@@ -130,37 +132,12 @@ func initConfig() {
 		}
 	}
 
-	// Dynamically set base_url based on provider if not explicitly set
-	if viper.GetString("base_url") == "" {
-		modelStr := viper.GetString("model")
-		provider, _, err := llmc.ParseModelString(modelStr)
-		if err != nil {
-			// Invalid format, use OpenAI as fallback
-			if verbose {
-				fmt.Fprintf(os.Stderr, "Warning: invalid model format '%s', using OpenAI base URL as default\n", modelStr)
-			}
-			viper.Set("base_url", openai.DefaultBaseURL)
-		} else {
-			switch provider {
-			case gemini.ProviderName:
-				viper.Set("base_url", gemini.DefaultBaseURL)
-			case openai.ProviderName:
-				viper.Set("base_url", openai.DefaultBaseURL)
-			default:
-				// Unknown provider, use OpenAI as fallback
-				if verbose {
-					fmt.Fprintf(os.Stderr, "Warning: unknown provider '%s', using OpenAI base URL as default\n", provider)
-				}
-				viper.Set("base_url", openai.DefaultBaseURL)
-			}
-		}
-	}
-
 	if verbose {
 		fmt.Fprintln(os.Stderr, "Using config file:", viper.ConfigFileUsed())
 		fmt.Fprintln(os.Stderr, "Environment variables:")
 		fmt.Fprintln(os.Stderr, "  LLMC_MODEL:", viper.GetString("model"))
-		fmt.Fprintln(os.Stderr, "  LLMC_BASE_URL:", viper.GetString("base_url"))
+		fmt.Fprintln(os.Stderr, "  LLMC_OPENAI_BASE_URL:", viper.GetString("openai_base_url"))
+		fmt.Fprintln(os.Stderr, "  LLMC_GEMINI_BASE_URL:", viper.GetString("gemini_base_url"))
 		fmt.Fprintln(os.Stderr, "  LLMC_PROMPT_DIRS:", viper.GetStringSlice("prompt_dirs"))
 		fmt.Fprintln(os.Stderr, "  LLMC_ENABLE_WEB_SEARCH:", viper.GetBool("enable_web_search"))
 	}

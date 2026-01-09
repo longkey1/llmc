@@ -12,9 +12,10 @@ import (
 
 // Config holds the configuration for the LLM provider
 type Config struct {
-	BaseURL               string   `toml:"base_url" mapstructure:"base_url"`
 	Model                 string   `toml:"model" mapstructure:"model"` // Format: "provider:model" (e.g., "openai:gpt-4")
+	OpenAIBaseURL         string   `toml:"openai_base_url" mapstructure:"openai_base_url"`
 	OpenAIToken           string   `toml:"openai_token" mapstructure:"openai_token"`
+	GeminiBaseURL         string   `toml:"gemini_base_url" mapstructure:"gemini_base_url"`
 	GeminiToken           string   `toml:"gemini_token" mapstructure:"gemini_token"`
 	PromptDirs            []string `toml:"prompt_dirs" mapstructure:"prompt_dirs"`
 	EnableWebSearch       bool     `toml:"enable_web_search" mapstructure:"enable_web_search"`
@@ -33,9 +34,39 @@ func (c *Config) GetModel() string {
 	return c.Model
 }
 
-// GetBaseURL returns the base URL
-func (c *Config) GetBaseURL() string {
-	return c.BaseURL
+// GetBaseURL returns the base URL for the specified provider
+// Resolves environment variable if value starts with "$" or "${"
+func (c *Config) GetBaseURL(provider string) (string, error) {
+	var baseURLValue string
+	switch provider {
+	case "openai":
+		baseURLValue = c.OpenAIBaseURL
+	case "gemini":
+		baseURLValue = c.GeminiBaseURL
+	default:
+		return "", fmt.Errorf("unsupported provider: %s", provider)
+	}
+
+	// Check if it's an environment variable reference
+	if strings.HasPrefix(baseURLValue, "$") {
+		var envVarName string
+		// Support both $VAR and ${VAR} syntax
+		if strings.HasPrefix(baseURLValue, "${") && strings.HasSuffix(baseURLValue, "}") {
+			// Extract variable name from ${VAR} format
+			envVarName = baseURLValue[2 : len(baseURLValue)-1]
+		} else {
+			// Extract variable name from $VAR format
+			envVarName = strings.TrimPrefix(baseURLValue, "$")
+		}
+
+		envValue := os.Getenv(envVarName)
+		if envValue == "" {
+			return "", fmt.Errorf("environment variable %s is not set or empty", envVarName)
+		}
+		return envValue, nil
+	}
+
+	return baseURLValue, nil
 }
 
 // GetProvider extracts provider name from the model string
@@ -88,9 +119,10 @@ func (c *Config) GetToken(provider string) (string, error) {
 // NewDefaultConfig returns a new Config with default values
 func NewDefaultConfig(promptDir string) *Config {
 	return &Config{
-		BaseURL:               "https://api.openai.com/v1",
 		Model:                 "openai:gpt-4.1", // Changed to "provider:model" format
+		OpenAIBaseURL:         "https://api.openai.com/v1",
 		OpenAIToken:           "$OPENAI_API_KEY", // Default to env var
+		GeminiBaseURL:         "https://generativelanguage.googleapis.com/v1beta",
 		GeminiToken:           "$GEMINI_API_KEY",
 		PromptDirs:            []string{promptDir},
 		EnableWebSearch:       false,

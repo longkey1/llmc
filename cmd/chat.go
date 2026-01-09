@@ -52,11 +52,6 @@ web_search = true  # Optional: enables web search for this prompt"`,
 			os.Exit(1)
 		}
 
-		// Override with command line flags if provided
-		if baseURL != "" {
-			config.BaseURL = baseURL
-		}
-
 		// Get message from arguments, editor, or stdin
 		var message string
 		if useEditor {
@@ -124,11 +119,41 @@ web_search = true  # Optional: enables web search for this prompt"`,
 			fmt.Fprintf(os.Stderr, "Using model from config file: %s\n", config.Model)
 		}
 
+		// Override base URL with command line flag if provided (after model is finalized)
+		if baseURL != "" {
+			// Determine which provider's base URL to override
+			provider, _, err := llmc.ParseModelString(config.Model)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error parsing model: %v\n", err)
+				os.Exit(1)
+			}
+			switch provider {
+			case "openai":
+				config.OpenAIBaseURL = baseURL
+			case "gemini":
+				config.GeminiBaseURL = baseURL
+			default:
+				fmt.Fprintf(os.Stderr, "Unknown provider: %s\n", provider)
+				os.Exit(1)
+			}
+			if verbose {
+				fmt.Fprintf(os.Stderr, "Overriding %s base URL with: %s\n", provider, baseURL)
+			}
+		}
+
 		// Debug output
 		if verbose {
 			provider, modelName, _ := llmc.ParseModelString(config.Model)
 			fmt.Fprintf(os.Stderr, "Model: %s (provider: %s, model: %s)\n", config.Model, provider, modelName)
-			fmt.Fprintf(os.Stderr, "Base URL: %s\n", config.BaseURL)
+
+			// Display the base URL for the current provider
+			baseURLValue, err := config.GetBaseURL(provider)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Warning: failed to get base URL: %v\n", err)
+			} else {
+				fmt.Fprintf(os.Stderr, "Base URL: %s\n", baseURLValue)
+			}
+
 			fmt.Fprintf(os.Stderr, "Prompt dirs: %v\n", config.PromptDirs)
 		}
 
@@ -247,7 +272,7 @@ func init() {
 
 	// Add command options
 	chatCmd.Flags().StringVarP(&model, "model", "m", viper.GetString("model"), "Model to use (format: provider:model, e.g., openai:gpt-4)")
-	chatCmd.Flags().StringVar(&baseURL, "base-url", viper.GetString("base_url"), "Base URL for the API")
+	chatCmd.Flags().StringVar(&baseURL, "base-url", "", "Base URL override for the current provider's API")
 	chatCmd.Flags().StringVarP(&prompt, "prompt", "p", "", "Name of the prompt template (without .toml extension)")
 	chatCmd.Flags().StringArrayVar(&argFlags, "arg", []string{}, "Key-value pairs for prompt template (format: key:value)")
 	chatCmd.Flags().BoolVarP(&useEditor, "editor", "e", false, "Use default editor (from EDITOR environment variable) to compose message")

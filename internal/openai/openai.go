@@ -80,7 +80,7 @@ type ResponsesAPIAnnotation struct {
 // Config defines the configuration interface for OpenAI provider
 type Config interface {
 	GetModel() string
-	GetBaseURL() string
+	GetBaseURL(provider string) (string, error)
 	GetToken(provider string) (string, error)
 }
 
@@ -123,8 +123,14 @@ func (p *Provider) ListModels() ([]llmc.ModelInfo, error) {
 		return nil, fmt.Errorf("failed to get token: %w", err)
 	}
 
+	// Get base URL for OpenAI
+	baseURL, err := p.config.GetBaseURL(ProviderName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get base URL: %w", err)
+	}
+
 	// Create HTTP request
-	req, err := http.NewRequest("GET", p.config.GetBaseURL()+"/models", nil)
+	req, err := http.NewRequest("GET", baseURL+"/models", nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %v", err)
 	}
@@ -230,8 +236,14 @@ func (p *Provider) Chat(message string) (string, error) {
 		return "", fmt.Errorf("failed to get token: %w", err)
 	}
 
+	// Get base URL for OpenAI
+	baseURL, err := p.config.GetBaseURL(ProviderName)
+	if err != nil {
+		return "", fmt.Errorf("failed to get base URL: %w", err)
+	}
+
 	// Create HTTP request
-	req, err := http.NewRequest("POST", p.config.GetBaseURL()+"/responses", bytes.NewBuffer(jsonData))
+	req, err := http.NewRequest("POST", baseURL+"/responses", bytes.NewBuffer(jsonData))
 	if err != nil {
 		return "", fmt.Errorf("error creating request: %v", err)
 	}

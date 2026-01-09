@@ -127,7 +127,7 @@ type GeminiSegment struct {
 // Config defines the configuration interface for Gemini provider
 type Config interface {
 	GetModel() string
-	GetBaseURL() string
+	GetBaseURL(provider string) (string, error)
 	GetToken(provider string) (string, error)
 }
 
@@ -172,8 +172,14 @@ func (p *Provider) ListModels() ([]llmc.ModelInfo, error) {
 		return nil, fmt.Errorf("failed to get token: %w", err)
 	}
 
+	// Get base URL for Gemini
+	baseURL, err := p.config.GetBaseURL(ProviderName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get base URL: %w", err)
+	}
+
 	// Build URL with API key
-	url := p.config.GetBaseURL() + "/models?key=" + token
+	url := baseURL + "/models?key=" + token
 
 	// Create HTTP request
 	req, err := http.NewRequest("GET", url, nil)
@@ -329,8 +335,11 @@ func (p *Provider) sendRequest(message string, enableWebSearch bool) (string, bo
 		return "", false, fmt.Errorf("failed to get token: %w", err)
 	}
 
-	// Create HTTP request
-	baseURL := p.config.GetBaseURL()
+	// Get base URL for Gemini
+	baseURL, err := p.config.GetBaseURL(ProviderName)
+	if err != nil {
+		return "", false, fmt.Errorf("failed to get base URL: %w", err)
+	}
 	if baseURL == "" {
 		baseURL = DefaultBaseURL
 	}

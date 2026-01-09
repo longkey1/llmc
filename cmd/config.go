@@ -18,11 +18,13 @@ var configCmd = &cobra.Command{
 This command shows all configuration values loaded from the config file and environment variables.
 
 If a field name is specified, only that field's value is displayed.
-Available fields: configfile, baseurl, model, openai_token, gemini_token, promptdirs, websearch, ignorewebsearcherrors
+Available fields: configfile, openai_base_url, gemini_base_url, model, openai_token, gemini_token, promptdirs, websearch, ignorewebsearcherrors
 
 Examples:
   llmc config                    # Show all configuration
   llmc config model             # Show only model
+  llmc config openai_base_url   # Show only OpenAI base URL
+  llmc config gemini_base_url   # Show only Gemini base URL
   llmc config openai_token      # Show only OpenAI token
   llmc config gemini_token      # Show only Gemini token
   llmc config promptdirs        # Show only prompt directories
@@ -43,8 +45,10 @@ Examples:
 			switch field {
 			case "configfile":
 				fmt.Println(viper.ConfigFileUsed())
-			case "baseurl":
-				fmt.Println(config.BaseURL)
+			case "openai_base_url", "openaibaseurl":
+				fmt.Println(config.OpenAIBaseURL)
+			case "gemini_base_url", "geminibaseurl":
+				fmt.Println(config.GeminiBaseURL)
 			case "model":
 				fmt.Println(config.Model)
 			case "openai_token", "openaitoken":
@@ -60,7 +64,7 @@ Examples:
 				fmt.Println(config.IgnoreWebSearchErrors)
 			default:
 				fmt.Fprintf(os.Stderr, "Unknown field: %s\n", args[0])
-				fmt.Fprintf(os.Stderr, "Available fields: configfile, baseurl, model, openai_token, gemini_token, promptdirs, websearch, ignorewebsearcherrors\n")
+				fmt.Fprintf(os.Stderr, "Available fields: configfile, openai_base_url, gemini_base_url, model, openai_token, gemini_token, promptdirs, websearch, ignorewebsearcherrors\n")
 				os.Exit(1)
 			}
 			return
@@ -68,10 +72,11 @@ Examples:
 
 		// Display all configuration values
 		fmt.Printf("ConfigFile: %s\n", viper.ConfigFileUsed())
-		fmt.Printf("BaseURL: %s\n", config.BaseURL)
-		fmt.Printf("Model: %s\n", config.Model)
+		fmt.Printf("OpenAIBaseURL: %s\n", config.OpenAIBaseURL)
 		fmt.Printf("OpenAIToken: %s\n", maskToken(config.OpenAIToken))
+		fmt.Printf("GeminiBaseURL: %s\n", config.GeminiBaseURL)
 		fmt.Printf("GeminiToken: %s\n", maskToken(config.GeminiToken))
+		fmt.Printf("Model: %s\n", config.Model)
 		// PromptDirs are already absolute paths
 		fmt.Printf("PromptDirectories: %s\n", strings.Join(config.PromptDirs, ","))
 		fmt.Printf("WebSearch: %v\n", config.EnableWebSearch)
