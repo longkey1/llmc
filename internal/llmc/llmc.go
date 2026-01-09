@@ -12,10 +12,10 @@ import (
 
 // Config holds the configuration for the LLM provider
 type Config struct {
-	Provider              string   `toml:"provider" mapstructure:"provider"`
 	BaseURL               string   `toml:"base_url" mapstructure:"base_url"`
-	Model                 string   `toml:"model" mapstructure:"model"`
-	Token                 string   `toml:"token" mapstructure:"token"`
+	Model                 string   `toml:"model" mapstructure:"model"` // Format: "provider:model" (e.g., "openai:gpt-4")
+	OpenAIToken           string   `toml:"openai_token" mapstructure:"openai_token"`
+	GeminiToken           string   `toml:"gemini_token" mapstructure:"gemini_token"`
 	PromptDirs            []string `toml:"prompt_dirs" mapstructure:"prompt_dirs"`
 	EnableWebSearch       bool     `toml:"enable_web_search" mapstructure:"enable_web_search"`
 	IgnoreWebSearchErrors bool     `toml:"ignore_web_search_errors" mapstructure:"ignore_web_search_errors"`
@@ -38,18 +38,51 @@ func (c *Config) GetBaseURL() string {
 	return c.BaseURL
 }
 
-// GetToken returns the API token
-func (c *Config) GetToken() string {
-	return c.Token
+// GetProvider extracts provider name from the model string
+func (c *Config) GetProvider() (string, error) {
+	provider, _, err := ParseModelString(c.Model)
+	return provider, err
+}
+
+// GetModelName extracts model name from the model string
+func (c *Config) GetModelName() (string, error) {
+	_, model, err := ParseModelString(c.Model)
+	return model, err
+}
+
+// GetToken returns the token for the specified provider
+// Resolves environment variable if value starts with "$"
+func (c *Config) GetToken(provider string) (string, error) {
+	var tokenValue string
+	switch provider {
+	case "openai":
+		tokenValue = c.OpenAIToken
+	case "gemini":
+		tokenValue = c.GeminiToken
+	default:
+		return "", fmt.Errorf("unsupported provider: %s", provider)
+	}
+
+	// Check if it's an environment variable reference
+	if strings.HasPrefix(tokenValue, "$") {
+		envVarName := strings.TrimPrefix(tokenValue, "$")
+		envValue := os.Getenv(envVarName)
+		if envValue == "" {
+			return "", fmt.Errorf("environment variable %s is not set or empty", envVarName)
+		}
+		return envValue, nil
+	}
+
+	return tokenValue, nil
 }
 
 // NewDefaultConfig returns a new Config with default values
 func NewDefaultConfig(promptDir string) *Config {
 	return &Config{
-		Provider:              "openai",
 		BaseURL:               "https://api.openai.com/v1",
-		Model:                 "gpt-4.1",
-		Token:                 "",
+		Model:                 "openai:gpt-4.1", // Changed to "provider:model" format
+		OpenAIToken:           "$OPENAI_API_KEY", // Default to env var
+		GeminiToken:           "$GEMINI_API_KEY",
 		PromptDirs:            []string{promptDir},
 		EnableWebSearch:       false,
 		IgnoreWebSearchErrors: false,
@@ -192,7 +225,32 @@ func FormatMessage(message string, promptName string, promptDirs []string, args 
 		userPrompt = strings.ReplaceAll(userPrompt, placeholder, value)
 	}
 
+	// Validate model format if specified in prompt
+	if promptTemplate.Model != nil {
+		if _, _, err := ParseModelString(*promptTemplate.Model); err != nil {
+			return "", nil, nil, fmt.Errorf("invalid model format in prompt template: %w", err)
+		}
+	}
+
 	return fmt.Sprintf("System: %s\n\nUser: %s", systemPrompt, userPrompt), promptTemplate.Model, promptTemplate.WebSearch, nil
+}
+
+// ParseModelString parses a model string in "provider:model" format
+// Returns (provider, model, error)
+func ParseModelString(modelStr string) (string, string, error) {
+	parts := strings.SplitN(modelStr, ":", 2)
+	if len(parts) != 2 {
+		return "", "", fmt.Errorf("invalid model format: %s (expected format: provider:model, e.g., openai:gpt-4)", modelStr)
+	}
+
+	provider := strings.TrimSpace(parts[0])
+	model := strings.TrimSpace(parts[1])
+
+	if provider == "" || model == "" {
+		return "", "", fmt.Errorf("provider and model cannot be empty")
+	}
+
+	return provider, model, nil
 }
 
 // processArgs processes the command line arguments and returns a map of key-value pairs

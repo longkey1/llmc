@@ -16,7 +16,6 @@ import (
 )
 
 var (
-	provider              string
 	model                 string
 	baseURL               string
 	prompt                string
@@ -54,9 +53,6 @@ web_search = true  # Optional: enables web search for this prompt"`,
 		}
 
 		// Override with command line flags if provided
-		if provider != "" {
-			config.Provider = provider
-		}
 		if baseURL != "" {
 			config.BaseURL = baseURL
 		}
@@ -92,18 +88,33 @@ web_search = true  # Optional: enables web search for this prompt"`,
 		envModel := os.Getenv("LLMC_MODEL")
 		if cmd.Flags().Changed("model") {
 			// 1. Command line flag takes highest priority
+			if _, _, err := llmc.ParseModelString(model); err != nil {
+				fmt.Fprintf(os.Stderr, "Error: invalid model from flag: %v\n", err)
+				fmt.Fprintf(os.Stderr, "Model must be in format: provider:model (e.g., openai:gpt-4)\n")
+				os.Exit(1)
+			}
 			config.Model = model
 			if verbose {
 				fmt.Fprintf(os.Stderr, "Using model from command line flag: %s\n", model)
 			}
 		} else if envModel != "" {
 			// 2. Environment variable is second priority
+			if _, _, err := llmc.ParseModelString(envModel); err != nil {
+				fmt.Fprintf(os.Stderr, "Error: invalid model from environment: %v\n", err)
+				fmt.Fprintf(os.Stderr, "Model must be in format: provider:model (e.g., openai:gpt-4)\n")
+				os.Exit(1)
+			}
 			config.Model = envModel
 			if verbose {
 				fmt.Fprintf(os.Stderr, "Using model from environment variable: %s\n", envModel)
 			}
 		} else if promptModel != nil {
 			// 3. Prompt template setting is third priority
+			if _, _, err := llmc.ParseModelString(*promptModel); err != nil {
+				fmt.Fprintf(os.Stderr, "Error: invalid model from prompt file: %v\n", err)
+				fmt.Fprintf(os.Stderr, "Model must be in format: provider:model (e.g., openai:gpt-4)\n")
+				os.Exit(1)
+			}
 			config.Model = *promptModel
 			if verbose {
 				fmt.Fprintf(os.Stderr, "Using model from prompt file: %s\n", config.Model)
@@ -115,10 +126,9 @@ web_search = true  # Optional: enables web search for this prompt"`,
 
 		// Debug output
 		if verbose {
-			fmt.Fprintf(os.Stderr, "Provider: %s\n", config.Provider)
-			fmt.Fprintf(os.Stderr, "Model: %s\n", config.Model)
+			provider, modelName, _ := llmc.ParseModelString(config.Model)
+			fmt.Fprintf(os.Stderr, "Model: %s (provider: %s, model: %s)\n", config.Model, provider, modelName)
 			fmt.Fprintf(os.Stderr, "Base URL: %s\n", config.BaseURL)
-			fmt.Fprintf(os.Stderr, "Token: %s\n", config.Token)
 			fmt.Fprintf(os.Stderr, "Prompt dirs: %v\n", config.PromptDirs)
 		}
 
@@ -236,8 +246,7 @@ func init() {
 	rootCmd.AddCommand(chatCmd)
 
 	// Add command options
-	chatCmd.Flags().StringVar(&provider, "provider", viper.GetString("provider"), "LLM provider (openai or gemini)")
-	chatCmd.Flags().StringVarP(&model, "model", "m", viper.GetString("model"), "Model to use")
+	chatCmd.Flags().StringVarP(&model, "model", "m", viper.GetString("model"), "Model to use (format: provider:model, e.g., openai:gpt-4)")
 	chatCmd.Flags().StringVar(&baseURL, "base-url", viper.GetString("base_url"), "Base URL for the API")
 	chatCmd.Flags().StringVarP(&prompt, "prompt", "p", "", "Name of the prompt template (without .toml extension)")
 	chatCmd.Flags().StringArrayVar(&argFlags, "arg", []string{}, "Key-value pairs for prompt template (format: key:value)")

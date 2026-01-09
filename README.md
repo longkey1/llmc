@@ -66,31 +66,31 @@ This will create a configuration file at `$HOME/.config/llmc/config.toml` with d
 llmc config
 
 # Show specific field only
-llmc config provider
 llmc config model
 llmc config baseurl
-llmc config token
+llmc config openai_token
+llmc config gemini_token
 llmc config promptdirs
 llmc config websearch
 llmc config ignorewebsearcherrors
 llmc config configfile
 
 # Example outputs:
-# llmc config provider                 → openai
-# llmc config model                    → gpt-4.1
+# llmc config model                    → openai:gpt-4.1
+# llmc config openai_token             → sk-...
 # llmc config promptdirs               → /path/to/prompts,/another/prompt/directory
 # llmc config websearch                → false
 # llmc config ignorewebsearcherrors    → false
 ```
 
-This will display all current configuration values, with the API token masked for security. You can also specify a field name to show only that field's value. The `promptdirs` field displays directories as comma-separated values.
+This will display all current configuration values, with the API tokens masked for security. You can also specify a field name to show only that field's value. The `promptdirs` field displays directories as comma-separated values.
 
 3. Edit the configuration file to set your API keys and preferences:
 ```toml
-provider = "openai"  # or "gemini"
-base_url = "https://api.openai.com/v1"  # or Gemini's API URL
-model = "your-model-name"  # Specify the model you want to use
-token = "your-api-token"
+model = "openai:gpt-4.1"  # Format: provider:model (e.g., openai:gpt-4, gemini:gemini-2.0-flash)
+base_url = "https://api.openai.com/v1"  # Optional: Override default base URL
+openai_token = "$OPENAI_API_KEY"  # Use $ENV_VAR_NAME to reference environment variable, or set token directly
+gemini_token = "$GEMINI_API_KEY"  # Configure tokens for each provider
 prompt_dirs = ["/path/to/prompts", "/another/prompt/directory"]  # Multiple directories supported
 enable_web_search = false  # Enable web search by default (default: false)
 ignore_web_search_errors = false  # Automatically retry without web search if it fails (Gemini-specific, default: false)
@@ -106,10 +106,9 @@ sudo mkdir -p /etc/llmc
 
 # Create system-wide configuration
 sudo tee /etc/llmc/config.toml > /dev/null <<EOF
-provider = "openai"
+model = "openai:gpt-4o"
 base_url = "https://api.openai.com/v1"
-model = "gpt-4o"
-# Don't include token in system-wide config - users should set this individually
+# Don't include tokens in system-wide config - users should set these individually
 # No need to set prompt_dirs - defaults will be used
 enable_web_search = false
 EOF
@@ -119,8 +118,8 @@ Users can then override specific settings in their `$HOME/.config/llmc/config.to
 
 ```toml
 # Only override what you need - inherits other settings from system config
-token = "your-personal-api-token"
-model = "gpt-4o-mini"  # Override the system default
+openai_token = "$OPENAI_API_KEY"
+model = "openai:gpt-4o-mini"  # Override the system default
 ```
 
 **Note**: Use verbose mode to see which configuration files are loaded:
@@ -136,17 +135,15 @@ llmc -v chat "Hello"
 You can also configure the tool using environment variables. Environment variables take precedence over configuration file settings.
 
 ```bash
-# Set provider (openai or gemini)
-export LLMC_PROVIDER="openai"
+# Set model (format: provider:model)
+export LLMC_MODEL="openai:gpt-4"
 
-# Set API base URL
+# Set API base URL (optional)
 export LLMC_BASE_URL="https://api.openai.com/v1"
 
-# Set model name
-export LLMC_MODEL="your-model-name"
-
-# Set API token
-export LLMC_TOKEN="your-api-token"
+# Set API tokens (configure for the providers you use)
+export LLMC_OPENAI_TOKEN="your-openai-api-token"
+export LLMC_GEMINI_TOKEN="your-gemini-api-token"
 
 # Set prompt directories (comma-separated)
 export LLMC_PROMPT_DIRS="/path/to/prompts,/another/prompt/directory"
@@ -162,9 +159,8 @@ You can add these to your shell profile (e.g., `~/.bashrc`, `~/.zshrc`) to make 
 
 ```bash
 # Add to your shell profile
-echo 'export LLMC_PROVIDER="openai"' >> ~/.bashrc
-echo 'export LLMC_TOKEN="your-api-token"' >> ~/.bashrc
-echo 'export LLMC_MODEL="your-model-name"' >> ~/.bashrc
+echo 'export LLMC_MODEL="openai:gpt-4"' >> ~/.bashrc
+echo 'export LLMC_OPENAI_TOKEN="your-openai-api-token"' >> ~/.bashrc
 source ~/.bashrc
 ```
 
@@ -186,8 +182,9 @@ echo "Hello, how are you?" | llmc chat
 # Use default editor (from EDITOR environment variable)
 llmc chat -e
 
-# List available models (fetches from API)
-llmc models
+# List available models for a provider (fetches from API)
+llmc models openai
+llmc models gemini
 ```
 
 ### Using Prompts
@@ -212,7 +209,7 @@ Create a prompt file (e.g., `$HOME/.config/llmc/prompts/example.toml`):
 ```toml
 system = "You are a helpful assistant. {{input}}"
 user = "Please help me with: {{input}}"
-model = "gpt-4o"  # Optional: overrides the default model for this prompt
+model = "openai:gpt-4o"  # Optional: overrides the default model for this prompt (format: provider:model)
 web_search = false  # Optional: disable web search for this prompt
 ```
 
@@ -237,11 +234,9 @@ llmc chat --prompt example "What is the capital of France?"
 ### Command Line Arguments
 
 ```bash
-# Specify provider
-llmc chat --provider openai "Hello"
-
-# Specify model
-llmc chat --model gpt-4 "Hello"
+# Specify model (format: provider:model)
+llmc chat --model openai:gpt-4 "Hello"
+llmc chat -m gemini:gemini-2.0-flash "Hello"
 
 # Specify base URL
 llmc chat --base-url "https://api.openai.com/v1" "Hello"

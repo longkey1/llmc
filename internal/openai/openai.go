@@ -81,7 +81,7 @@ type ResponsesAPIAnnotation struct {
 type Config interface {
 	GetModel() string
 	GetBaseURL() string
-	GetToken() string
+	GetToken(provider string) (string, error)
 }
 
 // Provider implements the llmc.Provider interface for OpenAI
@@ -117,6 +117,12 @@ func (p *Provider) SetDebug(enabled bool) {
 
 // ListModels returns the list of supported models from the API
 func (p *Provider) ListModels() ([]llmc.ModelInfo, error) {
+	// Get token for OpenAI
+	token, err := p.config.GetToken(ProviderName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get token: %w", err)
+	}
+
 	// Create HTTP request
 	req, err := http.NewRequest("GET", p.config.GetBaseURL()+"/models", nil)
 	if err != nil {
@@ -124,7 +130,7 @@ func (p *Provider) ListModels() ([]llmc.ModelInfo, error) {
 	}
 
 	// Set headers
-	req.Header.Set("Authorization", "Bearer "+p.config.GetToken())
+	req.Header.Set("Authorization", "Bearer "+token)
 
 	// Send request
 	client := &http.Client{}
@@ -162,7 +168,10 @@ func (p *Provider) ListModels() ([]llmc.ModelInfo, error) {
 
 	// Convert to ModelInfo format
 	models := make([]llmc.ModelInfo, 0)
-	defaultModel := p.config.GetModel()
+
+	// Extract default model name for comparison
+	defaultModelStr := p.config.GetModel()
+	_, defaultModel, _ := llmc.ParseModelString(defaultModelStr)
 
 	for _, model := range result.Data {
 		id := model.ID
@@ -190,11 +199,15 @@ func (p *Provider) ListModels() ([]llmc.ModelInfo, error) {
 
 // Chat sends a message to OpenAI's Responses API and returns the response
 func (p *Provider) Chat(message string) (string, error) {
-	model := p.config.GetModel()
+	// Extract model name from provider:model format
+	_, modelName, err := llmc.ParseModelString(p.config.GetModel())
+	if err != nil {
+		return "", fmt.Errorf("invalid model format: %w", err)
+	}
 
 	// Prepare the request body
 	reqBody := ResponsesAPIRequest{
-		Model: model,
+		Model: modelName,
 		Input: message,
 	}
 
@@ -211,6 +224,12 @@ func (p *Provider) Chat(message string) (string, error) {
 		return "", fmt.Errorf("error marshaling request: %v", err)
 	}
 
+	// Get token for OpenAI
+	token, err := p.config.GetToken(ProviderName)
+	if err != nil {
+		return "", fmt.Errorf("failed to get token: %w", err)
+	}
+
 	// Create HTTP request
 	req, err := http.NewRequest("POST", p.config.GetBaseURL()+"/responses", bytes.NewBuffer(jsonData))
 	if err != nil {
@@ -219,7 +238,7 @@ func (p *Provider) Chat(message string) (string, error) {
 
 	// Set headers
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+p.config.GetToken())
+	req.Header.Set("Authorization", "Bearer "+token)
 
 	// Send request
 	client := &http.Client{}

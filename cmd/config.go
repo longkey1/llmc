@@ -18,12 +18,13 @@ var configCmd = &cobra.Command{
 This command shows all configuration values loaded from the config file and environment variables.
 
 If a field name is specified, only that field's value is displayed.
-Available fields: configfile, provider, baseurl, model, token, promptdirs, websearch, ignorewebsearcherrors
+Available fields: configfile, baseurl, model, openai_token, gemini_token, promptdirs, websearch, ignorewebsearcherrors
 
 Examples:
   llmc config                    # Show all configuration
-  llmc config provider          # Show only provider
   llmc config model             # Show only model
+  llmc config openai_token      # Show only OpenAI token
+  llmc config gemini_token      # Show only Gemini token
   llmc config promptdirs        # Show only prompt directories
   llmc config websearch         # Show only web search setting
   llmc config ignorewebsearcherrors  # Show only ignore web search errors setting`,
@@ -42,14 +43,14 @@ Examples:
 			switch field {
 			case "configfile":
 				fmt.Println(viper.ConfigFileUsed())
-			case "provider":
-				fmt.Println(config.Provider)
 			case "baseurl":
 				fmt.Println(config.BaseURL)
 			case "model":
 				fmt.Println(config.Model)
-			case "token":
-				fmt.Println(maskToken(config.Token))
+			case "openai_token", "openaitoken":
+				fmt.Println(maskToken(config.OpenAIToken))
+			case "gemini_token", "geminitoken":
+				fmt.Println(maskToken(config.GeminiToken))
 			case "promptdirs":
 				// PromptDirs are already absolute paths
 				fmt.Println(strings.Join(config.PromptDirs, ","))
@@ -59,7 +60,7 @@ Examples:
 				fmt.Println(config.IgnoreWebSearchErrors)
 			default:
 				fmt.Fprintf(os.Stderr, "Unknown field: %s\n", args[0])
-				fmt.Fprintf(os.Stderr, "Available fields: configfile, provider, baseurl, model, token, promptdirs, websearch, ignorewebsearcherrors\n")
+				fmt.Fprintf(os.Stderr, "Available fields: configfile, baseurl, model, openai_token, gemini_token, promptdirs, websearch, ignorewebsearcherrors\n")
 				os.Exit(1)
 			}
 			return
@@ -67,10 +68,10 @@ Examples:
 
 		// Display all configuration values
 		fmt.Printf("ConfigFile: %s\n", viper.ConfigFileUsed())
-		fmt.Printf("Provider: %s\n", config.Provider)
 		fmt.Printf("BaseURL: %s\n", config.BaseURL)
 		fmt.Printf("Model: %s\n", config.Model)
-		fmt.Printf("Token: %s\n", maskToken(config.Token))
+		fmt.Printf("OpenAIToken: %s\n", maskToken(config.OpenAIToken))
+		fmt.Printf("GeminiToken: %s\n", maskToken(config.GeminiToken))
 		// PromptDirs are already absolute paths
 		fmt.Printf("PromptDirectories: %s\n", strings.Join(config.PromptDirs, ","))
 		fmt.Printf("WebSearch: %v\n", config.EnableWebSearch)

@@ -128,7 +128,7 @@ type GeminiSegment struct {
 type Config interface {
 	GetModel() string
 	GetBaseURL() string
-	GetToken() string
+	GetToken(provider string) (string, error)
 }
 
 // Provider implements the llmc.Provider interface for Gemini
@@ -166,8 +166,14 @@ func (p *Provider) SetDebug(enabled bool) {
 
 // ListModels returns the list of supported models from the API
 func (p *Provider) ListModels() ([]llmc.ModelInfo, error) {
+	// Get token for Gemini
+	token, err := p.config.GetToken(ProviderName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get token: %w", err)
+	}
+
 	// Build URL with API key
-	url := p.config.GetBaseURL() + "/models?key=" + p.config.GetToken()
+	url := p.config.GetBaseURL() + "/models?key=" + token
 
 	// Create HTTP request
 	req, err := http.NewRequest("GET", url, nil)
@@ -211,7 +217,10 @@ func (p *Provider) ListModels() ([]llmc.ModelInfo, error) {
 
 	// Convert to ModelInfo format
 	models := make([]llmc.ModelInfo, 0)
-	defaultModel := p.config.GetModel()
+
+	// Extract default model name for comparison
+	defaultModelStr := p.config.GetModel()
+	_, defaultModel, _ := llmc.ParseModelString(defaultModelStr)
 
 	for _, model := range result.Models {
 		// Extract model ID from name (remove "models/" prefix)
@@ -308,12 +317,24 @@ func (p *Provider) sendRequest(message string, enableWebSearch bool) (string, bo
 		return "", false, fmt.Errorf("error marshaling request: %v", err)
 	}
 
+	// Extract model name from provider:model format
+	_, modelName, err := llmc.ParseModelString(p.config.GetModel())
+	if err != nil {
+		return "", false, fmt.Errorf("invalid model format: %w", err)
+	}
+
+	// Get token for Gemini
+	token, err := p.config.GetToken(ProviderName)
+	if err != nil {
+		return "", false, fmt.Errorf("failed to get token: %w", err)
+	}
+
 	// Create HTTP request
 	baseURL := p.config.GetBaseURL()
 	if baseURL == "" {
 		baseURL = DefaultBaseURL
 	}
-	url := fmt.Sprintf("%s/models/%s:generateContent?key=%s", baseURL, p.config.GetModel(), p.config.GetToken())
+	url := fmt.Sprintf("%s/models/%s:generateContent?key=%s", baseURL, modelName, token)
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonData))
 	if err != nil {
 		return "", false, fmt.Errorf("error creating request: %v", err)
