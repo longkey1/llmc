@@ -113,6 +113,11 @@ func (c *Config) GetToken(provider string) (string, error) {
 		return envValue, nil
 	}
 
+	// Validate that token is not empty
+	if tokenValue == "" {
+		return "", fmt.Errorf("%s token is not configured. Set it in config file (%s_token) or environment variable (LLMC_%s_TOKEN)", provider, provider, strings.ToUpper(provider))
+	}
+
 	return tokenValue, nil
 }
 

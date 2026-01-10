@@ -244,10 +244,6 @@ llmc chat --prompt example "What is the capital of France?"
 llmc chat --model openai:gpt-4 "Hello"
 llmc chat -m gemini:gemini-2.0-flash "Hello"
 
-# Override base URL for the current provider
-llmc chat --model openai:gpt-4 --base-url "https://custom-openai-api.example.com/v1" "Hello"
-llmc chat --model gemini:gemini-2.0-flash --base-url "https://custom-gemini-api.example.com/v1beta" "Hello"
-
 # Use prompt template
 llmc chat --prompt example "Hello"
 

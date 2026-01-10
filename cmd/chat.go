@@ -17,7 +17,6 @@ import (
 
 var (
 	model                 string
-	baseURL               string
 	prompt                string
 	argFlags              []string
 	useEditor             bool
@@ -36,7 +35,7 @@ It does not maintain conversation history or provide interactive chat functional
 If no message is provided as an argument, it reads from stdin.
 If --editor flag is set, it opens the default editor (from EDITOR environment variable) to compose the message.
 
-You can specify the provider, model, base URL, and prompt using flags.
+You can specify the provider, model, and prompt using flags.
 If not specified, the values will be taken from the configuration file.
 
 The prompt file should be in TOML format with the following structure:
@@ -117,28 +116,6 @@ web_search = true  # Optional: enables web search for this prompt"`,
 		} else if verbose {
 			// 4. Config file or default
 			fmt.Fprintf(os.Stderr, "Using model from config file: %s\n", config.Model)
-		}
-
-		// Override base URL with command line flag if provided (after model is finalized)
-		if baseURL != "" {
-			// Determine which provider's base URL to override
-			provider, _, err := llmc.ParseModelString(config.Model)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Error parsing model: %v\n", err)
-				os.Exit(1)
-			}
-			switch provider {
-			case "openai":
-				config.OpenAIBaseURL = baseURL
-			case "gemini":
-				config.GeminiBaseURL = baseURL
-			default:
-				fmt.Fprintf(os.Stderr, "Unknown provider: %s\n", provider)
-				os.Exit(1)
-			}
-			if verbose {
-				fmt.Fprintf(os.Stderr, "Overriding %s base URL with: %s\n", provider, baseURL)
-			}
 		}
 
 		// Debug output
@@ -272,7 +249,6 @@ func init() {
 
 	// Add command options
 	chatCmd.Flags().StringVarP(&model, "model", "m", viper.GetString("model"), "Model to use (format: provider:model, e.g., openai:gpt-4)")
-	chatCmd.Flags().StringVar(&baseURL, "base-url", "", "Base URL override for the current provider's API")
 	chatCmd.Flags().StringVarP(&prompt, "prompt", "p", "", "Name of the prompt template (without .toml extension)")
 	chatCmd.Flags().StringArrayVar(&argFlags, "arg", []string{}, "Key-value pairs for prompt template (format: key:value)")
 	chatCmd.Flags().BoolVarP(&useEditor, "editor", "e", false, "Use default editor (from EDITOR environment variable) to compose message")
