@@ -5,7 +5,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/longkey1/llmc/internal/llmc"
+	"github.com/longkey1/llmc/internal/llmc/config"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -33,7 +33,7 @@ Examples:
 	Args: cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		// Load configuration from file
-		config, err := llmc.LoadConfig()
+		cfg, err := config.LoadConfig()
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)
 			os.Exit(1)
@@ -46,22 +46,22 @@ Examples:
 			case "configfile":
 				fmt.Println(viper.ConfigFileUsed())
 			case "openai_base_url", "openaibaseurl":
-				fmt.Println(config.OpenAIBaseURL)
+				fmt.Println(cfg.OpenAIBaseURL)
 			case "gemini_base_url", "geminibaseurl":
-				fmt.Println(config.GeminiBaseURL)
+				fmt.Println(cfg.GeminiBaseURL)
 			case "model":
-				fmt.Println(config.Model)
+				fmt.Println(cfg.Model)
 			case "openai_token", "openaitoken":
-				fmt.Println(maskToken(config.OpenAIToken))
+				fmt.Println(maskToken(cfg.OpenAIToken))
 			case "gemini_token", "geminitoken":
-				fmt.Println(maskToken(config.GeminiToken))
+				fmt.Println(maskToken(cfg.GeminiToken))
 			case "promptdirs":
 				// PromptDirs are already absolute paths
-				fmt.Println(strings.Join(config.PromptDirs, ","))
+				fmt.Println(strings.Join(cfg.PromptDirs, ","))
 			case "websearch":
-				fmt.Println(config.EnableWebSearch)
+				fmt.Println(cfg.EnableWebSearch)
 			case "ignorewebsearcherrors":
-				fmt.Println(config.IgnoreWebSearchErrors)
+				fmt.Println(cfg.IgnoreWebSearchErrors)
 			default:
 				fmt.Fprintf(os.Stderr, "Unknown field: %s\n", args[0])
 				fmt.Fprintf(os.Stderr, "Available fields: configfile, openai_base_url, gemini_base_url, model, openai_token, gemini_token, promptdirs, websearch, ignorewebsearcherrors\n")
@@ -72,15 +72,15 @@ Examples:
 
 		// Display all configuration values
 		fmt.Printf("ConfigFile: %s\n", viper.ConfigFileUsed())
-		fmt.Printf("OpenAIBaseURL: %s\n", config.OpenAIBaseURL)
-		fmt.Printf("OpenAIToken: %s\n", maskToken(config.OpenAIToken))
-		fmt.Printf("GeminiBaseURL: %s\n", config.GeminiBaseURL)
-		fmt.Printf("GeminiToken: %s\n", maskToken(config.GeminiToken))
-		fmt.Printf("Model: %s\n", config.Model)
+		fmt.Printf("OpenAIBaseURL: %s\n", cfg.OpenAIBaseURL)
+		fmt.Printf("OpenAIToken: %s\n", maskToken(cfg.OpenAIToken))
+		fmt.Printf("GeminiBaseURL: %s\n", cfg.GeminiBaseURL)
+		fmt.Printf("GeminiToken: %s\n", maskToken(cfg.GeminiToken))
+		fmt.Printf("Model: %s\n", cfg.Model)
 		// PromptDirs are already absolute paths
-		fmt.Printf("PromptDirectories: %s\n", strings.Join(config.PromptDirs, ","))
-		fmt.Printf("WebSearch: %v\n", config.EnableWebSearch)
-		fmt.Printf("IgnoreWebSearchErrors: %v\n", config.IgnoreWebSearchErrors)
+		fmt.Printf("PromptDirectories: %s\n", strings.Join(cfg.PromptDirs, ","))
+		fmt.Printf("WebSearch: %v\n", cfg.EnableWebSearch)
+		fmt.Printf("IgnoreWebSearchErrors: %v\n", cfg.IgnoreWebSearchErrors)
 	},
 }
 

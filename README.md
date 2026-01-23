@@ -193,6 +193,235 @@ llmc models openai
 llmc models gemini
 ```
 
+### Session Support
+
+LLMC supports conversation sessions, allowing you to maintain conversation history across multiple interactions. Sessions are useful for:
+- Multi-turn conversations with context awareness
+- Long-running discussions that preserve memory
+- Organizing different conversation topics
+- Interactive chat sessions
+
+#### Session Storage
+
+Sessions are stored as JSON files in the same directory as your configuration file:
+- If using `$HOME/.config/llmc/config.toml`: sessions are stored in `$HOME/.config/llmc/sessions/`
+- If using a custom config with `--config /path/to/config.toml`: sessions are stored in `/path/to/sessions/`
+
+Each session file is named with its full UUID (e.g., `550e8400-e29b-41d4-a716-446655440000.json`).
+
+#### Creating a New Session
+
+```bash
+# Create a new session with an initial message
+llmc chat --new-session "Hello, I'm starting a new conversation"
+# → Session created: 550e8400
+# → Path: /home/user/.config/llmc/sessions/550e8400-e29b-41d4-a716-446655440000.json
+# → Next time, use: llmc chat -s 550e8400 "your message"
+
+# Create a named session
+llmc chat --new-session --session-name "project-discussion" "Let's discuss the project"
+
+# Create a session with a specific model
+llmc chat --new-session -m gemini:gemini-2.5-flash "Hello"
+
+# Create a session with a prompt template
+llmc chat --new-session --prompt code-review "Review this code"
+```
+
+When you create a session with a prompt template:
+- The system prompt from the template is saved as a snapshot in the session
+- The session automatically uses this system prompt for all future messages
+- You don't need to specify the prompt again when continuing the session
+
+#### Continuing a Session
+
+```bash
+# Continue with 8-character short ID (recommended)
+llmc chat -s 550e8400 "What did we discuss earlier?"
+
+# Continue with minimum 4-character prefix
+llmc chat -s 550e "Tell me more"
+
+# Continue with full UUID
+llmc chat -s 550e8400-e29b-41d4-a716-446655440000 "Continue"
+
+# Use the latest session automatically
+llmc chat -s latest "What was my last question?"
+```
+
+Session IDs work like Git commit hashes:
+- **Full UUID**: 36 characters (e.g., `550e8400-e29b-41d4-a716-446655440000`)
+- **Short ID**: 8 characters displayed by default (e.g., `550e8400`)
+- **Minimum prefix**: 4 characters required for commands (e.g., `550e`)
+
+If multiple sessions match a prefix, you'll get a clear error message with options:
+```
+Error: Ambiguous session ID "550e". Multiple matches found:
+- 550e8400 (openai:gpt-4o-mini, 2026-01-23, 15 messages)
+- 550e9123 (gemini:gemini-2.5-flash, 2026-01-22, 8 messages)
+
+Please use a longer prefix or run 'llmc sessions list'.
+```
+
+#### Interactive Mode
+
+Start an interactive chat session with continuous conversation:
+
+```bash
+# Start interactive mode with a new session
+llmc chat --new-session -i "Hello"
+
+# Start interactive mode with an existing session
+llmc chat -s 550e8400 -i
+
+# Start interactive mode with optional initial message
+llmc chat -s 550e8400 -i "Let's continue our discussion"
+```
+
+Interactive mode features:
+- **`You>` prompt**: Type your messages naturally
+- **Auto-save**: Session is saved after each turn
+- **Special commands**:
+  - `/help` or `/h` - Show available commands
+  - `/info` or `/i` - Display session information
+  - `/clear` or `/c` - Clear screen (Unix/Linux only)
+  - `/exit` or `/quit` or `/q` - Exit interactive mode
+  - `Ctrl+D` - Exit interactive mode
+
+Example interactive session:
+```
+=== Interactive Session [550e8400] ===
+Provider: openai, Model: gpt-4o-mini
+Type '/help' for commands, '/exit' or 'Ctrl+D' to quit
+===================================
+
+You> What's the capital of France?
+Assistant> The capital of France is Paris.
+
+You> /info
+Session Information:
+  ID: 550e8400
+  Provider: openai
+  Model: gpt-4o-mini
+  Messages: 4
+  Created: 2026-01-23 10:30:00
+
+You> /exit
+Goodbye!
+```
+
+#### Session Management
+
+List all sessions:
+```bash
+llmc sessions list
+# ID        PROVIDER  MODEL        CREATED     MESSAGES  NAME
+# --------  --------  -----------  ----------  --------  ----------------
+# 550e8400  openai    gpt-4o-mini  2026-01-23  15        project-meeting
+# 9a3f92d1  gemini    gemini-2.5   2026-01-22  8         -
+```
+
+Show session details and full history:
+```bash
+llmc sessions show 550e8400
+# Session: 550e8400-e29b-41d4-a716-446655440000
+# Name: project-meeting
+# Provider: openai
+# Model: gpt-4o-mini
+# Created: 2026-01-23 10:30:00
+# Updated: 2026-01-23 14:25:00
+# Messages: 15
+#
+# Message History:
+# ----------------
+# [1] You (2026-01-23 10:30:00):
+# Hello, I'm starting a new conversation
+# ...
+```
+
+Rename a session:
+```bash
+llmc sessions rename 550e8400 "project-meeting"
+# Session 550e8400 renamed to "project-meeting".
+```
+
+Delete a session:
+```bash
+llmc sessions delete 550e8400
+# Are you sure you want to delete session 550e8400? [y/N]: y
+# Session 550e8400 deleted successfully.
+```
+
+Delete all sessions:
+```bash
+llmc sessions clear
+# Are you sure you want to delete all 3 sessions? [y/N]: y
+# Successfully deleted 3 sessions.
+```
+
+#### Session Summarization
+
+When sessions become too long, you can summarize them and create a new session with the summary as context:
+
+```bash
+llmc sessions summarize 550e8400
+# Summarizing 50 messages from session 550e8400...
+# Generating summary using openai:gpt-4o-mini...
+# New session created: 9a3f92d1 (parent: 550e8400)
+# Continue with: llmc chat -s 9a3f92d1 "your message"
+```
+
+The summarization feature:
+- Preserves the original session completely (no data loss)
+- Creates a new session with `ParentID` linking to the original
+- Places the summary as the first user message for context
+- Inherits the system prompt and template from the original session
+- Uses the same model that was used in the original session
+
+After summarization, the AI can still reference information from the original conversation through the summary.
+
+#### Session Message Threshold
+
+LLMC automatically warns you when a session becomes too long:
+
+```bash
+# Default threshold: 20 messages
+llmc chat -s 550e8400 "Continue our discussion"
+# Warning: Session 550e8400 has 25 messages (threshold: 20).
+# Long sessions may impact performance and token usage.
+#
+# Options:
+#   1. Continue anyway with --ignore-threshold flag
+#   2. Summarize session: llmc sessions summarize 550e8400
+#   3. Start a new session: llmc chat --new-session
+#
+# Continue with this session? [y/N]:
+```
+
+Configure the threshold in your config file:
+```toml
+# Add to $HOME/.config/llmc/config.toml
+session_message_threshold = 20  # 0 to disable warnings
+```
+
+Or via environment variable:
+```bash
+export LLMC_SESSION_MESSAGE_THRESHOLD=30
+```
+
+Bypass the warning for a single command:
+```bash
+llmc chat -s 550e8400 --ignore-threshold "Continue anyway"
+```
+
+#### Session Best Practices
+
+1. **Use descriptive names**: `llmc sessions rename <id> "feature-planning"`
+2. **Summarize long sessions**: Keep sessions under 20 messages for optimal performance
+3. **Organize by topic**: Create separate sessions for different conversations
+4. **Use interactive mode**: For back-and-forth discussions
+5. **Leverage prompt templates**: Create sessions with pre-configured system prompts
+
 ### Using Prompts
 
 #### Default Prompt Directories

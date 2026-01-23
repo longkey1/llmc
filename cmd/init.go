@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 
 	"github.com/BurntSushi/toml"
-	"github.com/longkey1/llmc/internal/llmc"
+	"github.com/longkey1/llmc/internal/llmc/config"
 	"github.com/spf13/cobra"
 )
 
@@ -42,7 +42,7 @@ You can specify a different location using the --config option.`,
 		}
 
 		// Create default config
-		config := llmc.NewDefaultConfig(filepath.Join(configDir, "prompts"))
+		cfg := config.NewDefaultConfig(filepath.Join(configDir, "prompts"))
 
 		// Create config file
 		f, err := os.Create(configFile)
@@ -53,7 +53,7 @@ You can specify a different location using the --config option.`,
 
 		// Encode config to TOML
 		encoder := toml.NewEncoder(f)
-		if err := encoder.Encode(config); err != nil {
+		if err := encoder.Encode(cfg); err != nil {
 			return fmt.Errorf("failed to encode config: %v", err)
 		}
 

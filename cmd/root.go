@@ -8,7 +8,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/longkey1/llmc/internal/llmc"
+	"github.com/longkey1/llmc/internal/llmc/config"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -69,7 +69,7 @@ func initConfig() {
 		"/usr/local/share/llmc/prompts",        // Local install prompts (low priority)
 		filepath.Join(userConfigDir, "prompts"), // User-specific prompts (highest priority)
 	}
-	defaultConfig := llmc.NewDefaultConfig(filepath.Join(userConfigDir, "prompts"))
+	defaultConfig := config.NewDefaultConfig(filepath.Join(userConfigDir, "prompts"))
 
 	// Set default values from llmc package
 	viper.SetDefault("model", defaultConfig.Model)

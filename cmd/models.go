@@ -10,6 +10,7 @@ import (
 
 	"github.com/longkey1/llmc/internal/gemini"
 	"github.com/longkey1/llmc/internal/llmc"
+	"github.com/longkey1/llmc/internal/llmc/config"
 	"github.com/longkey1/llmc/internal/openai"
 	"github.com/spf13/cobra"
 )
@@ -38,14 +39,14 @@ Example:
 		}
 
 		// Load config to get token
-		config, err := llmc.LoadConfig()
+		cfg, err := config.LoadConfig()
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)
 			os.Exit(1)
 		}
 
 		// Get token for the specified provider
-		token, err := config.GetToken(targetProvider)
+		token, err := cfg.GetToken(targetProvider)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			fmt.Fprintf(os.Stderr, "Please configure %s_token in your config file\n", targetProvider)
@@ -53,11 +54,11 @@ Example:
 		}
 
 		// Temporarily set the token and model for provider initialization
-		config.Model = fmt.Sprintf("%s:temp", targetProvider)
+		cfg.Model = fmt.Sprintf("%s:temp", targetProvider)
 		if targetProvider == openai.ProviderName {
-			config.OpenAIToken = token
+			cfg.OpenAIToken = token
 		} else {
-			config.GeminiToken = token
+			cfg.GeminiToken = token
 		}
 
 		if verbose {
@@ -68,11 +69,11 @@ Example:
 		var models []llmc.ModelInfo
 		var modelsErr error
 		if targetProvider == openai.ProviderName {
-			provider := openai.NewProvider(config)
+			provider := openai.NewProvider(cfg)
 			provider.SetDebug(verbose)
 			models, modelsErr = provider.ListModels()
 		} else {
-			provider := gemini.NewProvider(config)
+			provider := gemini.NewProvider(cfg)
 			provider.SetDebug(verbose)
 			models, modelsErr = provider.ListModels()
 		}

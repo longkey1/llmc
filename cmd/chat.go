@@ -12,6 +12,8 @@ import (
 	"strings"
 
 	"github.com/longkey1/llmc/internal/llmc"
+	"github.com/longkey1/llmc/internal/llmc/config"
+	promptpkg "github.com/longkey1/llmc/internal/llmc/prompt"
 	"github.com/longkey1/llmc/internal/llmc/session"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -52,7 +54,7 @@ model = "optional-model-name"  # Optional: overrides the default model for this 
 web_search = true  # Optional: enables web search for this prompt"`,
 	Run: func(cmd *cobra.Command, args []string) {
 		// Load configuration from file
-		config, err := llmc.LoadConfig()
+		cfg, err := config.LoadConfig()
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)
 			os.Exit(1)
@@ -117,7 +119,7 @@ web_search = true  # Optional: enables web search for this prompt"`,
 			}
 
 			// Check message threshold
-			threshold := config.SessionMessageThreshold
+			threshold := cfg.SessionMessageThreshold
 			if threshold > 0 && sess.MessageCount() >= threshold && !ignoreThreshold {
 				fmt.Fprintf(os.Stderr, "\nWarning: Session %s has %d messages (threshold: %d).\n",
 					sess.GetShortID(), sess.MessageCount(), threshold)
@@ -140,7 +142,7 @@ web_search = true  # Optional: enables web search for this prompt"`,
 
 			// Use session's system prompt and model
 			systemPrompt = sess.SystemPrompt
-			config.Model = sess.Provider + ":" + sess.Model
+			cfg.Model = sess.Provider + ":" + sess.Model
 
 			if verbose {
 				fmt.Fprintf(os.Stderr, "Continuing session: %s\n", sess.GetShortID())
@@ -158,7 +160,7 @@ web_search = true  # Optional: enables web search for this prompt"`,
 			var promptModel *string
 			var promptWebSearch *bool
 			if prompt != "" {
-				formattedMessage, promptModel, promptWebSearch, err = llmc.FormatMessage(message, prompt, config.PromptDirs, argFlags)
+				formattedMessage, promptModel, promptWebSearch, err = promptpkg.FormatMessage(message, prompt, cfg.PromptDirs, argFlags)
 				if err != nil {
 					fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 					os.Exit(1)
@@ -179,15 +181,15 @@ web_search = true  # Optional: enables web search for this prompt"`,
 						fmt.Fprintf(os.Stderr, "Error: invalid model from prompt file: %v\n", err)
 						os.Exit(1)
 					}
-					config.Model = *promptModel
+					cfg.Model = *promptModel
 					if verbose {
-						fmt.Fprintf(os.Stderr, "Using model from prompt file: %s\n", config.Model)
+						fmt.Fprintf(os.Stderr, "Using model from prompt file: %s\n", cfg.Model)
 					}
 				}
 
 				// Apply web search from prompt template
 				if promptWebSearch != nil && !cmd.Flags().Changed("web-search") {
-					config.EnableWebSearch = *promptWebSearch
+					cfg.EnableWebSearch = *promptWebSearch
 				}
 			}
 
@@ -198,17 +200,17 @@ web_search = true  # Optional: enables web search for this prompt"`,
 					fmt.Fprintf(os.Stderr, "Error: invalid model from flag: %v\n", err)
 					os.Exit(1)
 				}
-				config.Model = model
+				cfg.Model = model
 			} else if envModel != "" {
 				if _, _, err := llmc.ParseModelString(envModel); err != nil {
 					fmt.Fprintf(os.Stderr, "Error: invalid model from environment: %v\n", err)
 					os.Exit(1)
 				}
-				config.Model = envModel
+				cfg.Model = envModel
 			}
 
 			// Parse provider and model
-			provider, modelName, err := llmc.ParseModelString(config.Model)
+			provider, modelName, err := llmc.ParseModelString(cfg.Model)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Error: invalid model format: %v\n", err)
 				os.Exit(1)
@@ -229,7 +231,7 @@ web_search = true  # Optional: enables web search for this prompt"`,
 			}
 		} else {
 			// Single-shot mode (no session)
-			formattedMessage, promptModel, promptWebSearch, err := llmc.FormatMessage(message, prompt, config.PromptDirs, argFlags)
+			formattedMessage, promptModel, promptWebSearch, err := promptpkg.FormatMessage(message, prompt, cfg.PromptDirs, argFlags)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 				os.Exit(1)
@@ -242,30 +244,30 @@ web_search = true  # Optional: enables web search for this prompt"`,
 					fmt.Fprintf(os.Stderr, "Error: invalid model from flag: %v\n", err)
 					os.Exit(1)
 				}
-				config.Model = model
+				cfg.Model = model
 			} else if envModel != "" {
 				if _, _, err := llmc.ParseModelString(envModel); err != nil {
 					fmt.Fprintf(os.Stderr, "Error: invalid model from environment: %v\n", err)
 					os.Exit(1)
 				}
-				config.Model = envModel
+				cfg.Model = envModel
 			} else if promptModel != nil {
 				if _, _, err := llmc.ParseModelString(*promptModel); err != nil {
 					fmt.Fprintf(os.Stderr, "Error: invalid model from prompt file: %v\n", err)
 					os.Exit(1)
 				}
-				config.Model = *promptModel
+				cfg.Model = *promptModel
 			}
 
 			// Select provider
-			llmProvider, err := newProvider(config)
+			llmProvider, err := newProvider(cfg)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 				os.Exit(1)
 			}
 
 			// Configure web search
-			enableWebSearch := config.EnableWebSearch
+			enableWebSearch := cfg.EnableWebSearch
 			envWebSearch := os.Getenv("LLMC_ENABLE_WEB_SEARCH")
 			if cmd.Flags().Changed("web-search") {
 				enableWebSearch = webSearch
@@ -277,7 +279,7 @@ web_search = true  # Optional: enables web search for this prompt"`,
 			llmProvider.SetWebSearch(enableWebSearch)
 
 			// Configure ignore web search errors
-			enableIgnoreWebSearchErrors := config.IgnoreWebSearchErrors
+			enableIgnoreWebSearchErrors := cfg.IgnoreWebSearchErrors
 			envIgnoreWebSearchErrors := os.Getenv("LLMC_IGNORE_WEB_SEARCH_ERRORS")
 			if cmd.Flags().Changed("ignore-web-search-errors") {
 				enableIgnoreWebSearchErrors = ignoreWebSearchErrors
@@ -298,14 +300,14 @@ web_search = true  # Optional: enables web search for this prompt"`,
 		}
 
 		// Select provider
-		llmProvider, err := newProvider(config)
+		llmProvider, err := newProvider(cfg)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}
 
 		// Configure web search
-		enableWebSearch := config.EnableWebSearch
+		enableWebSearch := cfg.EnableWebSearch
 		envWebSearch := os.Getenv("LLMC_ENABLE_WEB_SEARCH")
 		if cmd.Flags().Changed("web-search") {
 			enableWebSearch = webSearch
@@ -315,7 +317,7 @@ web_search = true  # Optional: enables web search for this prompt"`,
 		llmProvider.SetWebSearch(enableWebSearch)
 
 		// Configure ignore web search errors
-		enableIgnoreWebSearchErrors := config.IgnoreWebSearchErrors
+		enableIgnoreWebSearchErrors := cfg.IgnoreWebSearchErrors
 		envIgnoreWebSearchErrors := os.Getenv("LLMC_IGNORE_WEB_SEARCH_ERRORS")
 		if cmd.Flags().Changed("ignore-web-search-errors") {
 			enableIgnoreWebSearchErrors = ignoreWebSearchErrors

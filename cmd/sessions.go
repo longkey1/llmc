@@ -6,7 +6,7 @@ import (
 	"strings"
 	"text/tabwriter"
 
-	"github.com/longkey1/llmc/internal/llmc"
+	"github.com/longkey1/llmc/internal/llmc/config"
 	"github.com/longkey1/llmc/internal/llmc/session"
 	"github.com/spf13/cobra"
 )
@@ -307,17 +307,17 @@ Conversation history:
 %s`, conversationText.String())
 
 		// Load config
-		config, err := llmc.LoadConfig()
+		cfg, err := config.LoadConfig()
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)
 			os.Exit(1)
 		}
 
 		// Use the original session's model for summarization
-		config.Model = sess.Provider + ":" + sess.Model
+		cfg.Model = sess.Provider + ":" + sess.Model
 
 		// Create provider
-		llmProvider, err := newProvider(config)
+		llmProvider, err := newProvider(cfg)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)

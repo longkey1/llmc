@@ -10,7 +10,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/longkey1/llmc/internal/llmc"
+	"github.com/longkey1/llmc/internal/llmc/config"
 	"github.com/spf13/cobra"
 )
 
@@ -30,7 +30,7 @@ model = "optional-model-name"  # Optional: overrides the default model for this 
 Prompt names are displayed in a table format with the relative path from the prompt directory root and the full file path.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		// Load configuration from file
-		config, err := llmc.LoadConfig()
+		cfg, err := config.LoadConfig()
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)
 			os.Exit(1)
@@ -38,7 +38,7 @@ Prompt names are displayed in a table format with the relative path from the pro
 
 		// Debug output
 		if verbose {
-			fmt.Fprintf(os.Stderr, "Prompt directories: %v\n", config.PromptDirs)
+			fmt.Fprintf(os.Stderr, "Prompt directories: %v\n", cfg.PromptDirs)
 		}
 
 		// Collect all prompt files from all directories
@@ -46,7 +46,7 @@ Prompt names are displayed in a table format with the relative path from the pro
 		promptMap := make(map[string]string)     // prompt name -> directory path
 		promptPathMap := make(map[string]string) // prompt name -> full file path
 
-		for _, promptDir := range config.PromptDirs {
+		for _, promptDir := range cfg.PromptDirs {
 			// promptDir is already an absolute path
 			// Check if directory exists
 			if _, err := os.Stat(promptDir); os.IsNotExist(err) {
@@ -119,7 +119,7 @@ Prompt names are displayed in a table format with the relative path from the pro
 		if len(allPrompts) == 0 {
 			fmt.Println("No prompt templates found.")
 			fmt.Println("Create .toml files in the following directories:")
-			for _, promptDir := range config.PromptDirs {
+			for _, promptDir := range cfg.PromptDirs {
 				// Show the original path (relative or absolute) in the message
 				fmt.Printf("  - %s\n", promptDir)
 			}
