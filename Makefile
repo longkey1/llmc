@@ -10,7 +10,7 @@ init: ## Initialize the project
 .PHONY: release
 
 # Get current version from git tag
-VERSION := $(shell git tag --sort=-v:refname | head -n1 2>/dev/null || echo "v0.0.0")
+VERSION := $(shell v=$$(git tag --sort=-v:refname | head -n1 2>/dev/null); [ -n "$$v" ] && echo "$$v" || echo "v0.0.0")
 MAJOR := $(shell echo $(VERSION) | cut -d. -f1 | tr -d 'v')
 MINOR := $(shell echo $(VERSION) | cut -d. -f2)
 PATCH := $(shell echo $(VERSION) | cut -d. -f3)
