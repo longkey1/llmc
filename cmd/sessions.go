@@ -25,18 +25,17 @@ var sessionsListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List all sessions",
 	Long:  `List all conversation sessions sorted by most recently updated.`,
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		sessions, err := session.ListSessions()
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
+			return fmt.Errorf("listing sessions: %w", err)
 		}
 
 		if len(sessions) == 0 {
 			fmt.Println("No sessions found.")
 			fmt.Println("\nCreate a new session with:")
 			fmt.Println("  llmc chat --new-session \"your message\"")
-			return
+			return nil
 		}
 
 		// Print table header
@@ -62,6 +61,7 @@ var sessionsListCmd = &cobra.Command{
 		w.Flush()
 
 		fmt.Println("\nUse 'llmc sessions show <id>' to view session details.")
+		return nil
 	},
 }
 
@@ -73,14 +73,13 @@ var sessionsShowCmd = &cobra.Command{
 
 The ID can be a short ID (minimum 4 characters), full UUID, or "latest" for the most recent session.`,
 	Args: cobra.ExactArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		sessionID := args[0]
 
 		// Find session by prefix
 		sess, err := session.FindSessionByPrefix(sessionID)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
+			return fmt.Errorf("finding session: %w", err)
 		}
 
 		// Print session info
@@ -107,7 +106,7 @@ The ID can be a short ID (minimum 4 characters), full UUID, or "latest" for the 
 		// Print message history
 		if len(sess.Messages) == 0 {
 			fmt.Println("No messages in this session.")
-			return
+			return nil
 		}
 
 		fmt.Println("Message History:")
@@ -135,6 +134,7 @@ The ID can be a short ID (minimum 4 characters), full UUID, or "latest" for the 
 		}
 
 		fmt.Printf("\nContinue this session with:\n  llmc chat -s %s \"your message\"\n", sess.GetShortID())
+		return nil
 	},
 }
 
@@ -148,14 +148,13 @@ The ID can be a short ID (minimum 4 characters), full UUID, or "latest" for the 
 
 Warning: This action cannot be undone.`,
 	Args: cobra.ExactArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		sessionID := args[0]
 
 		// Find session by prefix
 		sess, err := session.FindSessionByPrefix(sessionID)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
+			return fmt.Errorf("finding session: %w", err)
 		}
 
 		// Confirm deletion
@@ -165,16 +164,16 @@ Warning: This action cannot be undone.`,
 
 		if response != "y" && response != "Y" {
 			fmt.Println("Deletion cancelled.")
-			return
+			return nil
 		}
 
 		// Delete the session
 		if err := session.DeleteSession(sess.ID); err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
+			return fmt.Errorf("deleting session: %w", err)
 		}
 
 		fmt.Printf("Session %s deleted successfully.\n", sess.GetShortID())
+		return nil
 	},
 }
 
@@ -186,15 +185,14 @@ var sessionsRenameCmd = &cobra.Command{
 
 The ID can be a short ID (minimum 4 characters), full UUID, or "latest" for the most recent session.`,
 	Args: cobra.ExactArgs(2),
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		sessionID := args[0]
 		newName := args[1]
 
 		// Find session by prefix
 		sess, err := session.FindSessionByPrefix(sessionID)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
+			return fmt.Errorf("finding session: %w", err)
 		}
 
 		// Update session name
@@ -202,11 +200,11 @@ The ID can be a short ID (minimum 4 characters), full UUID, or "latest" for the 
 
 		// Save session
 		if err := session.SaveSession(sess); err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
+			return fmt.Errorf("saving session: %w", err)
 		}
 
 		fmt.Printf("Session %s renamed to \"%s\".\n", sess.GetShortID(), newName)
+		return nil
 	},
 }
 
@@ -217,16 +215,15 @@ var sessionsClearCmd = &cobra.Command{
 	Long: `Delete all conversation sessions permanently.
 
 Warning: This action cannot be undone.`,
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		sessions, err := session.ListSessions()
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
+			return fmt.Errorf("listing sessions: %w", err)
 		}
 
 		if len(sessions) == 0 {
 			fmt.Println("No sessions to delete.")
-			return
+			return nil
 		}
 
 		// Confirm deletion
@@ -236,7 +233,7 @@ Warning: This action cannot be undone.`,
 
 		if response != "y" && response != "Y" {
 			fmt.Println("Deletion cancelled.")
-			return
+			return nil
 		}
 
 		// Delete all sessions
@@ -256,6 +253,7 @@ Warning: This action cannot be undone.`,
 			fmt.Printf(" (%d failed)", failed)
 		}
 		fmt.Println(".")
+		return nil
 	},
 }
 
@@ -268,19 +266,17 @@ var sessionsSummarizeCmd = &cobra.Command{
 The original session is preserved and the new session has its ParentID set.
 The ID can be a short ID (minimum 4 characters), full UUID, or "latest" for the most recent session.`,
 	Args: cobra.ExactArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		sessionID := args[0]
 
 		// Find session by prefix
 		sess, err := session.FindSessionByPrefix(sessionID)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
+			return fmt.Errorf("finding session: %w", err)
 		}
 
 		if sess.MessageCount() == 0 {
-			fmt.Fprintf(os.Stderr, "Error: session %s has no messages to summarize\n", sess.GetShortID())
-			os.Exit(1)
+			return fmt.Errorf("session %s has no messages to summarize", sess.GetShortID())
 		}
 
 		fmt.Fprintf(os.Stderr, "Summarizing %d messages from session %s...\n", sess.MessageCount(), sess.GetShortID())
@@ -309,8 +305,7 @@ Conversation history:
 		// Load config
 		cfg, err := config.LoadConfig()
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)
-			os.Exit(1)
+			return fmt.Errorf("loading config: %w", err)
 		}
 
 		// Use the original session's model for summarization
@@ -319,8 +314,7 @@ Conversation history:
 		// Create provider
 		llmProvider, err := newProvider(cfg)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
+			return fmt.Errorf("creating provider: %w", err)
 		}
 		llmProvider.SetDebug(verbose)
 
@@ -329,8 +323,7 @@ Conversation history:
 		// Generate summary
 		summary, err := llmProvider.Chat(summarizationPrompt)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error generating summary: %v\n", err)
-			os.Exit(1)
+			return fmt.Errorf("generating summary: %w", err)
 		}
 
 		// Create new session with summary
@@ -345,14 +338,14 @@ Conversation history:
 
 		// Save new session
 		if err := session.SaveSession(newSess); err != nil {
-			fmt.Fprintf(os.Stderr, "Error saving new session: %v\n", err)
-			os.Exit(1)
+			return fmt.Errorf("saving new session: %w", err)
 		}
 
 		fmt.Fprintf(os.Stderr, "\nNew session created: %s (parent: %s)\n", newSess.GetShortID(), sess.GetShortID())
 		sessionDir, _ := session.GetSessionDir()
 		fmt.Fprintf(os.Stderr, "Path: %s/%s.json\n", sessionDir, newSess.ID)
 		fmt.Fprintf(os.Stderr, "\nContinue with:\n  llmc chat -s %s \"your message\"\n", newSess.GetShortID())
+		return nil
 	},
 }
 

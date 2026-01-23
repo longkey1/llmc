@@ -28,12 +28,11 @@ user = "User prompt with optional {{input}} placeholder"
 model = "optional-model-name"  # Optional: overrides the default model for this prompt
 
 Prompt names are displayed in a table format with the relative path from the prompt directory root and the full file path.`,
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		// Load configuration from file
 		cfg, err := config.LoadConfig()
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)
-			os.Exit(1)
+			return fmt.Errorf("loading config: %w", err)
 		}
 
 		// Debug output
@@ -123,7 +122,7 @@ Prompt names are displayed in a table format with the relative path from the pro
 				// Show the original path (relative or absolute) in the message
 				fmt.Printf("  - %s\n", promptDir)
 			}
-			return
+			return nil
 		}
 
 		fmt.Printf("Available prompt templates (%d found):\n\n", len(allPrompts))
@@ -147,6 +146,7 @@ Prompt names are displayed in a table format with the relative path from the pro
 
 		fmt.Printf("\nUse a prompt template with: llmc chat --prompt <name> [message]\n")
 		fmt.Printf("Example: llmc chat --prompt foo/bar [message]\n")
+		return nil
 	},
 }
 

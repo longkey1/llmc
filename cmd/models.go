@@ -28,29 +28,24 @@ Example:
   llmc models openai    # List OpenAI models
   llmc models gemini    # List Gemini models`,
 	Args: cobra.ExactArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		targetProvider := args[0]
 
 		// Validate provider
 		if targetProvider != openai.ProviderName && targetProvider != gemini.ProviderName {
-			fmt.Fprintf(os.Stderr, "Error: unsupported provider '%s'\n", targetProvider)
-			fmt.Fprintf(os.Stderr, "Supported providers: openai, gemini\n")
-			os.Exit(1)
+			return fmt.Errorf("unsupported provider '%s'\nSupported providers: openai, gemini", targetProvider)
 		}
 
 		// Load config to get token
 		cfg, err := config.LoadConfig()
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)
-			os.Exit(1)
+			return fmt.Errorf("loading config: %w", err)
 		}
 
 		// Get token for the specified provider
 		token, err := cfg.GetToken(targetProvider)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			fmt.Fprintf(os.Stderr, "Please configure %s_token in your config file\n", targetProvider)
-			os.Exit(1)
+			return fmt.Errorf("%w\nPlease configure %s_token in your config file", err, targetProvider)
 		}
 
 		// Temporarily set the token and model for provider initialization
@@ -79,14 +74,11 @@ Example:
 		}
 
 		if modelsErr != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", modelsErr)
-			os.Exit(1)
+			return fmt.Errorf("listing models: %w", modelsErr)
 		}
 
 		if len(models) == 0 {
-			fmt.Fprintf(os.Stderr, "Error: No models returned from API.\n")
-			fmt.Fprintf(os.Stderr, "Please check your API token and network connection.\n")
-			os.Exit(1)
+			return fmt.Errorf("no models returned from API\nPlease check your API token and network connection")
 		}
 
 		// Display provider name
@@ -122,6 +114,7 @@ Example:
 
 		// Usage hint
 		fmt.Printf("\nUse a model with: llmc chat --model %s:<model-id> [message]\n", targetProvider)
+		return nil
 	},
 }
 

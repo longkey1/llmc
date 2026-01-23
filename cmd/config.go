@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/longkey1/llmc/internal/llmc/config"
@@ -31,12 +30,11 @@ Examples:
   llmc config websearch         # Show only web search setting
   llmc config ignorewebsearcherrors  # Show only ignore web search errors setting`,
 	Args: cobra.MaximumNArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		// Load configuration from file
 		cfg, err := config.LoadConfig()
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)
-			os.Exit(1)
+			return fmt.Errorf("loading config: %w", err)
 		}
 
 		// If a field is specified, show only that field
@@ -63,11 +61,9 @@ Examples:
 			case "ignorewebsearcherrors":
 				fmt.Println(cfg.IgnoreWebSearchErrors)
 			default:
-				fmt.Fprintf(os.Stderr, "Unknown field: %s\n", args[0])
-				fmt.Fprintf(os.Stderr, "Available fields: configfile, openai_base_url, gemini_base_url, model, openai_token, gemini_token, promptdirs, websearch, ignorewebsearcherrors\n")
-				os.Exit(1)
+				return fmt.Errorf("unknown field: %s\nAvailable fields: configfile, openai_base_url, gemini_base_url, model, openai_token, gemini_token, promptdirs, websearch, ignorewebsearcherrors", args[0])
 			}
-			return
+			return nil
 		}
 
 		// Display all configuration values
@@ -81,6 +77,7 @@ Examples:
 		fmt.Printf("PromptDirectories: %s\n", strings.Join(cfg.PromptDirs, ","))
 		fmt.Printf("WebSearch: %v\n", cfg.EnableWebSearch)
 		fmt.Printf("IgnoreWebSearchErrors: %v\n", cfg.IgnoreWebSearchErrors)
+		return nil
 	},
 }
 

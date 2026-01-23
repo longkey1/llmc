@@ -19,7 +19,7 @@ var versionCmd = &cobra.Command{
 - Git commit SHA
 - Build time
 - Go version`,
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		// Check for short flag
 		short, _ := cmd.Flags().GetBool("short")
 		if short {
@@ -27,6 +27,7 @@ var versionCmd = &cobra.Command{
 		} else {
 			fmt.Println(version.Info())
 		}
+		return nil
 	},
 }
 

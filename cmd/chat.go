@@ -52,30 +52,26 @@ system = "System prompt with optional {{input}} placeholder"
 user = "User prompt with optional {{input}} placeholder"
 model = "optional-model-name"  # Optional: overrides the default model for this prompt
 web_search = true  # Optional: enables web search for this prompt"`,
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		// Load configuration from file
 		cfg, err := config.LoadConfig()
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)
-			os.Exit(1)
+			return fmt.Errorf("loading config: %w", err)
 		}
 
 		// Validate session flags
 		if sessionID != "" && newSession {
-			fmt.Fprintf(os.Stderr, "Error: cannot specify both --session and --new-session\n")
-			os.Exit(1)
+			return fmt.Errorf("cannot specify both --session and --new-session")
 		}
 
 		// Cannot use prompt with existing session
 		if sessionID != "" && prompt != "" {
-			fmt.Fprintf(os.Stderr, "Error: cannot use --prompt with existing session\n")
-			os.Exit(1)
+			return fmt.Errorf("cannot use --prompt with existing session")
 		}
 
 		// Interactive mode requires a session
 		if interactive && sessionID == "" && !newSession {
-			fmt.Fprintf(os.Stderr, "Error: interactive mode requires --session or --new-session\n")
-			os.Exit(1)
+			return fmt.Errorf("interactive mode requires --session or --new-session")
 		}
 
 		// Get message from arguments, editor, or stdin (not required for interactive mode)
@@ -84,8 +80,7 @@ web_search = true  # Optional: enables web search for this prompt"`,
 			if useEditor {
 				message, err = getMessageFromEditor()
 				if err != nil {
-					fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-					os.Exit(1)
+					return fmt.Errorf("getting message from editor: %w", err)
 				}
 			} else if len(args) > 0 {
 				message = strings.Join(args, " ")
@@ -93,8 +88,7 @@ web_search = true  # Optional: enables web search for this prompt"`,
 				// Read from stdin
 				input, err := io.ReadAll(os.Stdin)
 				if err != nil {
-					fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-					os.Exit(1)
+					return fmt.Errorf("reading from stdin: %w", err)
 				}
 				message = strings.TrimSpace(string(input))
 			}
@@ -114,8 +108,7 @@ web_search = true  # Optional: enables web search for this prompt"`,
 			// Load existing session
 			sess, err = session.FindSessionByPrefix(sessionID)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-				os.Exit(1)
+				return fmt.Errorf("finding session: %w", err)
 			}
 
 			// Check message threshold
@@ -136,7 +129,7 @@ web_search = true  # Optional: enables web search for this prompt"`,
 
 				if response != "y" && response != "Y" {
 					fmt.Fprintln(os.Stderr, "Cancelled.")
-					os.Exit(0)
+					return nil
 				}
 			}
 
@@ -162,8 +155,7 @@ web_search = true  # Optional: enables web search for this prompt"`,
 			if prompt != "" {
 				formattedMessage, promptModel, promptWebSearch, err = promptpkg.FormatMessage(message, prompt, cfg.PromptDirs, argFlags)
 				if err != nil {
-					fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-					os.Exit(1)
+					return fmt.Errorf("formatting message with prompt: %w", err)
 				}
 
 				// Extract system prompt from formatted message
@@ -178,8 +170,7 @@ web_search = true  # Optional: enables web search for this prompt"`,
 				// Apply model from prompt template
 				if promptModel != nil {
 					if _, _, err := llmc.ParseModelString(*promptModel); err != nil {
-						fmt.Fprintf(os.Stderr, "Error: invalid model from prompt file: %v\n", err)
-						os.Exit(1)
+						return fmt.Errorf("invalid model from prompt file: %w", err)
 					}
 					cfg.Model = *promptModel
 					if verbose {
@@ -197,14 +188,12 @@ web_search = true  # Optional: enables web search for this prompt"`,
 			envModel := os.Getenv("LLMC_MODEL")
 			if cmd.Flags().Changed("model") {
 				if _, _, err := llmc.ParseModelString(model); err != nil {
-					fmt.Fprintf(os.Stderr, "Error: invalid model from flag: %v\n", err)
-					os.Exit(1)
+					return fmt.Errorf("invalid model from flag: %w", err)
 				}
 				cfg.Model = model
 			} else if envModel != "" {
 				if _, _, err := llmc.ParseModelString(envModel); err != nil {
-					fmt.Fprintf(os.Stderr, "Error: invalid model from environment: %v\n", err)
-					os.Exit(1)
+					return fmt.Errorf("invalid model from environment: %w", err)
 				}
 				cfg.Model = envModel
 			}
@@ -212,8 +201,7 @@ web_search = true  # Optional: enables web search for this prompt"`,
 			// Parse provider and model
 			provider, modelName, err := llmc.ParseModelString(cfg.Model)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "Error: invalid model format: %v\n", err)
-				os.Exit(1)
+				return fmt.Errorf("invalid model format: %w", err)
 			}
 
 			// Create new session
@@ -233,28 +221,24 @@ web_search = true  # Optional: enables web search for this prompt"`,
 			// Single-shot mode (no session)
 			formattedMessage, promptModel, promptWebSearch, err := promptpkg.FormatMessage(message, prompt, cfg.PromptDirs, argFlags)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-				os.Exit(1)
+				return fmt.Errorf("formatting message with prompt: %w", err)
 			}
 
 			// Apply model priority
 			envModel := os.Getenv("LLMC_MODEL")
 			if cmd.Flags().Changed("model") {
 				if _, _, err := llmc.ParseModelString(model); err != nil {
-					fmt.Fprintf(os.Stderr, "Error: invalid model from flag: %v\n", err)
-					os.Exit(1)
+					return fmt.Errorf("invalid model from flag: %w", err)
 				}
 				cfg.Model = model
 			} else if envModel != "" {
 				if _, _, err := llmc.ParseModelString(envModel); err != nil {
-					fmt.Fprintf(os.Stderr, "Error: invalid model from environment: %v\n", err)
-					os.Exit(1)
+					return fmt.Errorf("invalid model from environment: %w", err)
 				}
 				cfg.Model = envModel
 			} else if promptModel != nil {
 				if _, _, err := llmc.ParseModelString(*promptModel); err != nil {
-					fmt.Fprintf(os.Stderr, "Error: invalid model from prompt file: %v\n", err)
-					os.Exit(1)
+					return fmt.Errorf("invalid model from prompt file: %w", err)
 				}
 				cfg.Model = *promptModel
 			}
@@ -262,8 +246,7 @@ web_search = true  # Optional: enables web search for this prompt"`,
 			// Select provider
 			llmProvider, err := newProvider(cfg)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-				os.Exit(1)
+				return fmt.Errorf("creating provider: %w", err)
 			}
 
 			// Configure web search
@@ -292,18 +275,16 @@ web_search = true  # Optional: enables web search for this prompt"`,
 			// Send message and print response
 			response, err := llmProvider.Chat(formattedMessage)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-				os.Exit(1)
+				return fmt.Errorf("chat request failed: %w", err)
 			}
 			fmt.Println(response)
-			return
+			return nil
 		}
 
 		// Select provider
 		llmProvider, err := newProvider(cfg)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
+			return fmt.Errorf("creating provider: %w", err)
 		}
 
 		// Configure web search
@@ -336,8 +317,7 @@ web_search = true  # Optional: enables web search for this prompt"`,
 			historyMessages := sess.Messages[:len(sess.Messages)-1]
 			response, err := llmProvider.ChatWithHistory(sess.SystemPrompt, historyMessages, message)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-				os.Exit(1)
+				return fmt.Errorf("chat request failed: %w", err)
 			}
 
 			// Add assistant response to session
@@ -345,8 +325,7 @@ web_search = true  # Optional: enables web search for this prompt"`,
 
 			// Save session
 			if err := session.SaveSession(sess); err != nil {
-				fmt.Fprintf(os.Stderr, "Error saving session: %v\n", err)
-				os.Exit(1)
+				return fmt.Errorf("saving session: %w", err)
 			}
 
 			// Print response
@@ -366,10 +345,10 @@ web_search = true  # Optional: enables web search for this prompt"`,
 		// If interactive mode, start the loop
 		if interactive {
 			if err := runInteractiveMode(sess, llmProvider); err != nil {
-				fmt.Fprintf(os.Stderr, "Error in interactive mode: %v\n", err)
-				os.Exit(1)
+				return fmt.Errorf("interactive mode: %w", err)
 			}
 		}
+		return nil
 	},
 }
 
