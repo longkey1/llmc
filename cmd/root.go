@@ -79,12 +79,14 @@ func initConfig() {
 	viper.SetDefault("gemini_token", defaultConfig.GeminiToken)
 	viper.SetDefault("prompt_dirs", defaultPromptDirs)
 	viper.SetDefault("enable_web_search", defaultConfig.EnableWebSearch)
+	viper.SetDefault("session_message_threshold", defaultConfig.SessionMessageThreshold)
 
 	// Bind environment variables
 	viper.BindEnv("openai_base_url", "LLMC_OPENAI_BASE_URL")
 	viper.BindEnv("openai_token", "LLMC_OPENAI_TOKEN")
 	viper.BindEnv("gemini_base_url", "LLMC_GEMINI_BASE_URL")
 	viper.BindEnv("gemini_token", "LLMC_GEMINI_TOKEN")
+	viper.BindEnv("session_message_threshold", "LLMC_SESSION_MESSAGE_THRESHOLD")
 
 	if cfgFile != "" {
 		// Use config file from the flag.

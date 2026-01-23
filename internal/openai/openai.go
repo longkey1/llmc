@@ -34,9 +34,16 @@ type ModelData struct {
 
 // ResponsesAPIRequest represents the request body for OpenAI's Responses API
 type ResponsesAPIRequest struct {
-	Model  string              `json:"model"`
-	Input  string              `json:"input"`
-	Tools  []ResponsesAPITool  `json:"tools,omitempty"`
+	Model        string             `json:"model"`
+	Instructions string             `json:"instructions,omitempty"` // System-level instructions (optional)
+	Input        interface{}        `json:"input"`                  // string or []InputMessage
+	Tools        []ResponsesAPITool `json:"tools,omitempty"`
+}
+
+// InputMessage represents a message in the conversation history
+type InputMessage struct {
+	Role    string `json:"role"`    // "user" or "assistant"
+	Content string `json:"content"` // Message content
 }
 
 // ResponsesAPITool represents a tool configuration
@@ -215,6 +222,161 @@ func (p *Provider) Chat(message string) (string, error) {
 	reqBody := ResponsesAPIRequest{
 		Model: modelName,
 		Input: message,
+	}
+
+	// Add web_search tool if enabled
+	if p.webSearchEnabled {
+		reqBody.Tools = []ResponsesAPITool{
+			{Type: "web_search"},
+		}
+	}
+
+	// Convert request body to JSON
+	jsonData, err := json.Marshal(reqBody)
+	if err != nil {
+		return "", fmt.Errorf("error marshaling request: %v", err)
+	}
+
+	// Get token for OpenAI
+	token, err := p.config.GetToken(ProviderName)
+	if err != nil {
+		return "", fmt.Errorf("failed to get token: %w", err)
+	}
+
+	// Get base URL for OpenAI
+	baseURL, err := p.config.GetBaseURL(ProviderName)
+	if err != nil {
+		return "", fmt.Errorf("failed to get base URL: %w", err)
+	}
+
+	// Create HTTP request
+	req, err := http.NewRequest("POST", baseURL+"/responses", bytes.NewBuffer(jsonData))
+	if err != nil {
+		return "", fmt.Errorf("error creating request: %v", err)
+	}
+
+	// Set headers
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	// Send request
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("error sending request: %v", err)
+	}
+	defer resp.Body.Close()
+
+	// Read response body
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("error reading response: %v", err)
+	}
+
+	// Check for error response
+	if resp.StatusCode != http.StatusOK {
+		if p.debug {
+			return "", fmt.Errorf("API request failed (HTTP %d): %s", resp.StatusCode, string(body))
+		}
+		return "", fmt.Errorf("API request failed (HTTP %d). Use --verbose for details", resp.StatusCode)
+	}
+
+	// Parse response
+	var result ResponsesAPIResponse
+	if err := json.Unmarshal(body, &result); err != nil {
+		if p.debug {
+			return "", fmt.Errorf("failed to parse API response: %v\nRaw response: %s", err, string(body))
+		}
+		return "", fmt.Errorf("failed to parse API response. Use --verbose for details")
+	}
+
+	// Check for API error in response
+	if result.Error != nil {
+		if p.debug {
+			return "", fmt.Errorf("API error [%s]: %s (id=%s, status=%s)",
+				result.Error.Code, result.Error.Message, result.ID, result.Status)
+		}
+		return "", fmt.Errorf("API error: %s", result.Error.Message)
+	}
+
+	if len(result.Output) == 0 {
+		if p.debug {
+			return "", fmt.Errorf("API returned empty response (id=%s, status=%s)\nRaw response: %s",
+				result.ID, result.Status, string(body))
+		}
+		return "", fmt.Errorf("API returned empty response. Use --verbose for details")
+	}
+
+	// Find the message output (web_search returns multiple outputs)
+	var messageOutput *ResponsesAPIOutput
+	var outputTypes []string
+	for i := range result.Output {
+		outputTypes = append(outputTypes, result.Output[i].Type)
+		if result.Output[i].Type == "message" {
+			messageOutput = &result.Output[i]
+			break
+		}
+	}
+
+	if messageOutput == nil {
+		if p.debug {
+			return "", fmt.Errorf("no message found in API response (found types: %v)\nRaw response: %s",
+				outputTypes, string(body))
+		}
+		return "", fmt.Errorf("no message found in API response (found: %v). Use --verbose for details", outputTypes)
+	}
+
+	if len(messageOutput.Content) == 0 {
+		if p.debug {
+			return "", fmt.Errorf("message has no content (id=%s, status=%s)\nRaw response: %s",
+				result.ID, result.Status, string(body))
+		}
+		return "", fmt.Errorf("message has no content. Use --verbose for details")
+	}
+
+	// Extract text and citations
+	content := messageOutput.Content[0]
+	responseText := content.Text
+
+	// Format citations if present
+	if len(content.Annotations) > 0 {
+		citations := extractCitations(content.Annotations)
+		if citations != "" {
+			responseText += "\n\n---\nSources:\n" + citations
+		}
+	}
+
+	return responseText, nil
+}
+
+// ChatWithHistory sends a conversation history with a new message to OpenAI's Responses API
+func (p *Provider) ChatWithHistory(systemPrompt string, messages []llmc.Message, newMessage string) (string, error) {
+	// Extract model name from provider:model format
+	_, modelName, err := llmc.ParseModelString(p.config.GetModel())
+	if err != nil {
+		return "", fmt.Errorf("invalid model format: %w", err)
+	}
+
+	// Convert messages to InputMessage array
+	inputMessages := make([]InputMessage, 0, len(messages)+1)
+	for _, msg := range messages {
+		inputMessages = append(inputMessages, InputMessage{
+			Role:    msg.Role,
+			Content: msg.Content,
+		})
+	}
+
+	// Add new message
+	inputMessages = append(inputMessages, InputMessage{
+		Role:    "user",
+		Content: newMessage,
+	})
+
+	// Prepare the request body
+	reqBody := ResponsesAPIRequest{
+		Model:        modelName,
+		Instructions: systemPrompt, // Can be empty string
+		Input:        inputMessages,
 	}
 
 	// Add web_search tool if enabled

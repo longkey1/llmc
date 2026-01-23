@@ -42,12 +42,19 @@ type GeminiModelData struct {
 
 // GeminiRequest represents the request body for Gemini's generate content API
 type GeminiRequest struct {
-	Contents []GeminiContent `json:"contents"`
-	Tools    []GeminiTool    `json:"tools,omitempty"`
+	Contents          []GeminiContent          `json:"contents"`
+	SystemInstruction *GeminiSystemInstruction `json:"system_instruction,omitempty"`
+	Tools             []GeminiTool             `json:"tools,omitempty"`
+}
+
+// GeminiSystemInstruction represents system instruction for Gemini
+type GeminiSystemInstruction struct {
+	Parts []GeminiPart `json:"parts"`
 }
 
 // GeminiContent represents a content item in the Gemini request format
 type GeminiContent struct {
+	Role  string       `json:"role,omitempty"` // "user" or "model"
 	Parts []GeminiPart `json:"parts"`
 }
 
@@ -436,6 +443,186 @@ func (p *Provider) sendRequest(message string, enableWebSearch bool) (string, bo
 	}
 
 	return responseText, shouldRetry, nil
+}
+
+// ChatWithHistory sends a conversation history with a new message to Gemini's API
+func (p *Provider) ChatWithHistory(systemPrompt string, messages []llmc.Message, newMessage string) (string, error) {
+	// Convert messages to GeminiContent array
+	contents := make([]GeminiContent, 0, len(messages)+1)
+	for _, msg := range messages {
+		role := msg.Role
+		// Gemini uses "model" instead of "assistant"
+		if role == "assistant" {
+			role = "model"
+		}
+		contents = append(contents, GeminiContent{
+			Role:  role,
+			Parts: []GeminiPart{{Text: msg.Content}},
+		})
+	}
+
+	// Add new user message
+	contents = append(contents, GeminiContent{
+		Role:  "user",
+		Parts: []GeminiPart{{Text: newMessage}},
+	})
+
+	// Prepare the request body
+	reqBody := GeminiRequest{
+		Contents: contents,
+	}
+
+	// Add system instruction if provided
+	if systemPrompt != "" {
+		reqBody.SystemInstruction = &GeminiSystemInstruction{
+			Parts: []GeminiPart{{Text: systemPrompt}},
+		}
+	}
+
+	// Add Google Search tool if enabled
+	if p.webSearchEnabled {
+		reqBody.Tools = []GeminiTool{
+			{
+				GoogleSearch: &GeminiGoogleSearch{},
+			},
+		}
+	}
+
+	// Convert request body to JSON
+	jsonData, err := json.Marshal(reqBody)
+	if err != nil {
+		return "", fmt.Errorf("error marshaling request: %v", err)
+	}
+
+	// Extract model name from provider:model format
+	_, modelName, err := llmc.ParseModelString(p.config.GetModel())
+	if err != nil {
+		return "", fmt.Errorf("invalid model format: %w", err)
+	}
+
+	// Get token for Gemini
+	token, err := p.config.GetToken(ProviderName)
+	if err != nil {
+		return "", fmt.Errorf("failed to get token: %w", err)
+	}
+
+	// Get base URL for Gemini
+	baseURL, err := p.config.GetBaseURL(ProviderName)
+	if err != nil {
+		return "", fmt.Errorf("failed to get base URL: %w", err)
+	}
+	if baseURL == "" {
+		baseURL = DefaultBaseURL
+	}
+	url := fmt.Sprintf("%s/models/%s:generateContent?key=%s", baseURL, modelName, token)
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonData))
+	if err != nil {
+		return "", fmt.Errorf("error creating request: %v", err)
+	}
+
+	// Set headers
+	req.Header.Set("Content-Type", "application/json")
+
+	// Send request
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("error sending request: %v", err)
+	}
+	defer resp.Body.Close()
+
+	// Read response body
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("error reading response: %v", err)
+	}
+
+	// Check for error response
+	if resp.StatusCode != http.StatusOK {
+		if p.debug {
+			return "", fmt.Errorf("API error (HTTP %d): %s", resp.StatusCode, string(body))
+		}
+		return "", fmt.Errorf("API error: %s", string(body))
+	}
+
+	// Debug: print raw response
+	if p.debug {
+		fmt.Fprintf(os.Stderr, "Raw API response: %s\n", string(body))
+	}
+
+	// Parse response
+	var result GeminiResponse
+	if err := json.Unmarshal(body, &result); err != nil {
+		if p.debug {
+			return "", fmt.Errorf("error parsing response: %v\nRaw response: %s", err, string(body))
+		}
+		return "", fmt.Errorf("error parsing response: %v", err)
+	}
+
+	// Debug: print parsed response structure
+	if p.debug {
+		fmt.Fprintf(os.Stderr, "Candidates count: %d\n", len(result.Candidates))
+		if len(result.Candidates) > 0 {
+			fmt.Fprintf(os.Stderr, "Parts count in first candidate: %d\n", len(result.Candidates[0].Content.Parts))
+		}
+	}
+
+	if len(result.Candidates) == 0 {
+		if p.debug {
+			return "", fmt.Errorf("no response from API (empty candidates)\nRaw response: %s", string(body))
+		}
+		return "", fmt.Errorf("no response from API")
+	}
+
+	var responseText string
+	shouldRetry := false
+
+	// Check if there's text content in parts
+	if len(result.Candidates[0].Content.Parts) > 0 {
+		responseText = result.Candidates[0].Content.Parts[0].Text
+	}
+
+	// If no text content but grounding metadata exists, mark for retry
+	if responseText == "" && result.GroundingMetadata != nil && p.webSearchEnabled {
+		shouldRetry = true
+		if p.debug {
+			fmt.Fprintf(os.Stderr, "Empty response with grounding metadata detected (known Gemini API issue)\n")
+		}
+	}
+
+	// If still no content and should retry, retry without web search
+	if shouldRetry && p.ignoreWebSearchErrors {
+		if p.debug {
+			fmt.Fprintf(os.Stderr, "Web search returned empty response, retrying without web search...\n")
+		}
+		// Recursive call without web search (temporarily disable it)
+		originalWebSearch := p.webSearchEnabled
+		p.webSearchEnabled = false
+		response, err := p.ChatWithHistory(systemPrompt, messages, newMessage)
+		p.webSearchEnabled = originalWebSearch
+		return response, err
+	}
+
+	// If still no content and shouldn't retry, return error
+	if responseText == "" {
+		if shouldRetry {
+			return "", fmt.Errorf("web search did not return a text response (known Gemini API issue). Use --ignore-web-search-errors to automatically retry without web search")
+		}
+		if p.debug {
+			return "", fmt.Errorf("no response from API (empty parts)\nRaw response: %s", string(body))
+		}
+		return "", fmt.Errorf("no response from API")
+	}
+
+	// Format citations if grounding metadata is present
+	if result.GroundingMetadata != nil && len(result.GroundingMetadata.GroundingChunks) > 0 {
+		citations := extractGroundingCitations(result.GroundingMetadata)
+		if citations != "" {
+			responseText += "\n\n---\nSources:\n" + citations
+		}
+	}
+
+	return responseText, nil
 }
 
 // extractGroundingCitations formats grounding chunks into a citation list
