@@ -385,9 +385,9 @@ After summarization, the AI can still reference information from the original co
 LLMC automatically warns you when a session becomes too long:
 
 ```bash
-# Default threshold: 20 messages
+# Default threshold: 50 messages
 llmc chat -s 550e8400 "Continue our discussion"
-# Warning: Session 550e8400 has 25 messages (threshold: 20).
+# Warning: Session 550e8400 has 55 messages (threshold: 50).
 # Long sessions may impact performance and token usage.
 #
 # Options:
@@ -401,7 +401,7 @@ llmc chat -s 550e8400 "Continue our discussion"
 Configure the threshold in your config file:
 ```toml
 # Add to $HOME/.config/llmc/config.toml
-session_message_threshold = 20  # 0 to disable warnings
+session_message_threshold = 50  # 0 to disable warnings
 ```
 
 Or via environment variable:
