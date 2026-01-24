@@ -48,7 +48,7 @@ func NewDefaultConfig(promptDir string) *Config {
 		PromptDirs:              []string{promptDir},
 		EnableWebSearch:         false,
 		IgnoreWebSearchErrors:   false,
-		SessionMessageThreshold: 20, // Default threshold (0 = disabled)
+		SessionMessageThreshold: 50, // Default threshold (0 = disabled)
 	}
 }
 
