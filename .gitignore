@@ -1,27 +1,29 @@
-# Project specific
-/.devcontainer/devcontainer.json
-/llmc
-CLAUDE.md
+# Build outputs
+/bin/
+/dist/
 
-# Binaries
+# Executables
 *.exe
 *.exe~
 *.dll
 *.so
 *.dylib
+
+# Test binary
 *.test
-*.out
 
-# Configuration
-*.toml
-
-# Dependencies
-vendor/
+# Go workspace
 go.work
+go.work.sum
+vendor/
 
-# Build artifacts
-bin/
-pkg/
+# Environment
+.env
+.envrc
+.direnv/
+
+# Cache
+/.cache/
 
 # IDE
 .idea/
@@ -29,5 +31,6 @@ pkg/
 *.swp
 *.swo
 
-# Cache
-.cache/
+# OS
+.DS_Store
+Thumbs.db
