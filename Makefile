@@ -1,11 +1,7 @@
 .DEFAULT_GOAL := help
 
 export GO_VERSION=$(shell grep "^go " go.mod | sed 's/^go //')
-export PRODUCT_NAME := llmc
-
-.PHONY: init
-init: ## Initialize the project
-	cd .devcontainer && cat devcontainer.json.dist | envsubst '$${GO_VERSION} $${PRODUCT_NAME}' > devcontainer.json
+export PRODUCT_NAME=$(shell cat .product_name 2>/dev/null || echo "unknown")
 
 .PHONY: build
 build: ## Build the binary to ./bin/
@@ -31,6 +27,10 @@ tidy: ## Tidy dependencies
 .PHONY: clean
 clean: ## Clean build artifacts
 	rm -rf bin/
+
+.PHONY: tools
+tools: ## Install tools
+	go install github.com/goreleaser/goreleaser@latest
 
 .PHONY: release
 
@@ -150,4 +150,3 @@ re-release: ## Rerelease target with tag argument. Usage: make re-release tag=<t
 .PHONY: help
 help:
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}'
-

@@ -1,4 +1,4 @@
-name: Release
+name: gorelease
 
 run-name: Release ${{ github.ref_name }}
 
@@ -7,7 +7,6 @@ on:
     tags:
       - 'v*'
 
-# Add permissions section
 permissions:
   contents: write
   packages: write
@@ -15,7 +14,7 @@ permissions:
   pull-requests: write
 
 jobs:
-  goreleaser:
+  gorelease:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -23,16 +22,18 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Fetch all tags
+        run: git fetch --force --tags
+
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.24'
+          go-version: stable
 
       - name: Run GoReleaser
-        uses: goreleaser/goreleaser-action@v5
+        uses: goreleaser/goreleaser-action@v6
         with:
-          distribution: goreleaser
           version: latest
           args: release --clean
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
