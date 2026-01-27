@@ -7,6 +7,31 @@ export PRODUCT_NAME := llmc
 init: ## Initialize the project
 	cd .devcontainer && cat devcontainer.json.dist | envsubst '$${GO_VERSION} $${PRODUCT_NAME}' > devcontainer.json
 
+.PHONY: build
+build: ## Build the binary to ./bin/
+	@mkdir -p bin
+	go build -o bin/$(PRODUCT_NAME)
+
+.PHONY: test
+test: ## Run tests
+	go test ./...
+
+.PHONY: fmt
+fmt: ## Format code
+	go fmt ./...
+
+.PHONY: vet
+vet: ## Vet code
+	go vet ./...
+
+.PHONY: tidy
+tidy: ## Tidy dependencies
+	go mod tidy
+
+.PHONY: clean
+clean: ## Clean build artifacts
+	rm -rf bin/
+
 .PHONY: release
 
 # Get current version from git tag
