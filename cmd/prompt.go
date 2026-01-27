@@ -11,12 +11,13 @@ import (
 	"strings"
 
 	"github.com/longkey1/llmc/internal/llmc/config"
+	promptpkg "github.com/longkey1/llmc/internal/llmc/prompt"
 	"github.com/spf13/cobra"
 )
 
-// promptCmd represents the prompt command
+// promptCmd represents the prompts command
 var promptCmd = &cobra.Command{
-	Use:   "prompt",
+	Use:   "prompts",
 	Short: "List available prompt templates",
 	Long: `List all available prompt templates from the configured prompt directories.
 This command recursively scans all prompt directories specified in the configuration and displays
@@ -40,10 +41,16 @@ Prompt names are displayed in a table format with the relative path from the pro
 			fmt.Fprintf(os.Stderr, "Prompt directories: %v\n", cfg.PromptDirs)
 		}
 
+		// promptInfo holds information about each prompt
+		type promptInfo struct {
+			path      string
+			model     string
+			webSearch string
+		}
+
 		// Collect all prompt files from all directories
 		var allPrompts []string
-		promptMap := make(map[string]string)     // prompt name -> directory path
-		promptPathMap := make(map[string]string) // prompt name -> full file path
+		promptInfoMap := make(map[string]*promptInfo) // prompt name -> prompt info
 
 		for _, promptDir := range cfg.PromptDirs {
 			// promptDir is already an absolute path
@@ -86,17 +93,63 @@ Prompt names are displayed in a table format with the relative path from the pro
 				// Convert Windows path separators to forward slashes for consistency
 				promptName = filepath.ToSlash(promptName)
 
+				// Load prompt file to get model and web_search settings
+				promptData, err := promptpkg.LoadPrompt(path)
+				if err != nil {
+					if verbose {
+						fmt.Fprintf(os.Stderr, "Warning: Failed to load prompt '%s': %v\n", promptName, err)
+					}
+					// Continue even if we can't load the prompt
+				}
+
+				// Extract model and web_search info
+				// Use default values in parentheses if not set in prompt
+				modelStr := ""
+				webSearchStr := ""
+				if promptData != nil {
+					if promptData.Model != nil {
+						modelStr = *promptData.Model
+					} else {
+						modelStr = fmt.Sprintf("(%s)", cfg.Model)
+					}
+					if promptData.WebSearch != nil {
+						if *promptData.WebSearch {
+							webSearchStr = "enabled"
+						} else {
+							webSearchStr = "disabled"
+						}
+					} else {
+						if cfg.EnableWebSearch {
+							webSearchStr = "(enabled)"
+						} else {
+							webSearchStr = "(disabled)"
+						}
+					}
+				} else {
+					// If prompt failed to load, show defaults
+					modelStr = fmt.Sprintf("(%s)", cfg.Model)
+					if cfg.EnableWebSearch {
+						webSearchStr = "(enabled)"
+					} else {
+						webSearchStr = "(disabled)"
+					}
+				}
+
 				// Check if we already found this prompt in another directory
-				existingDir, exists := promptMap[promptName]
+				_, exists := promptInfoMap[promptName]
 				if exists {
 					if verbose {
+						existingPath := promptInfoMap[promptName].path
 						fmt.Fprintf(os.Stderr, "Warning: Prompt '%s' found in multiple directories: %s and %s (using %s)\n",
-							promptName, existingDir, promptDir, promptDir)
+							promptName, filepath.Dir(existingPath), promptDir, promptDir)
 					}
 				}
 				// Always update with the current directory (later directories take precedence)
-				promptMap[promptName] = promptDir
-				promptPathMap[promptName] = path
+				promptInfoMap[promptName] = &promptInfo{
+					path:      path,
+					model:     modelStr,
+					webSearch: webSearchStr,
+				}
 				// Only add to allPrompts if this is the first time we've seen this prompt
 				if !exists {
 					allPrompts = append(allPrompts, promptName)
@@ -127,21 +180,42 @@ Prompt names are displayed in a table format with the relative path from the pro
 
 		fmt.Printf("Available prompt templates (%d found):\n\n", len(allPrompts))
 
-		// Calculate maximum width for prompt names (minimum 15 characters)
+		// Calculate maximum widths for columns (with minimum values)
 		maxNameWidth := 15
+		maxModelWidth := 10
+		maxWebSearchWidth := 10
 		for _, promptName := range allPrompts {
 			if len(promptName) > maxNameWidth {
 				maxNameWidth = len(promptName)
 			}
+			info := promptInfoMap[promptName]
+			if len(info.model) > maxModelWidth {
+				maxModelWidth = len(info.model)
+			}
+			if len(info.webSearch) > maxWebSearchWidth {
+				maxWebSearchWidth = len(info.webSearch)
+			}
 		}
 
 		// Display in table format
-		fmt.Printf("%-*s  %s\n", maxNameWidth, "PROMPT", "FILE PATH")
-		fmt.Printf("%s  %s\n", strings.Repeat("-", maxNameWidth), strings.Repeat("-", 80))
+		fmt.Printf("%-*s  %-*s  %-*s  %s\n",
+			maxNameWidth, "PROMPT",
+			maxModelWidth, "MODEL",
+			maxWebSearchWidth, "WEB SEARCH",
+			"FILE PATH")
+		fmt.Printf("%s  %s  %s  %s\n",
+			strings.Repeat("-", maxNameWidth),
+			strings.Repeat("-", maxModelWidth),
+			strings.Repeat("-", maxWebSearchWidth),
+			strings.Repeat("-", 60))
 
 		for _, promptName := range allPrompts {
-			filePath := promptPathMap[promptName]
-			fmt.Printf("%-*s  %s\n", maxNameWidth, promptName, filePath)
+			info := promptInfoMap[promptName]
+			fmt.Printf("%-*s  %-*s  %-*s  %s\n",
+				maxNameWidth, promptName,
+				maxModelWidth, info.model,
+				maxWebSearchWidth, info.webSearch,
+				info.path)
 		}
 
 		fmt.Printf("\nUse a prompt template with: llmc chat --prompt <name> [message]\n")

@@ -39,6 +39,49 @@ If a system-wide configuration exists, user configuration values will be merged 
 
 You can add custom prompt directories by editing the `prompt_dirs` array in your configuration file.
 
+## Development
+
+For developers working on the LLMC codebase:
+
+### Building from Source
+
+**IMPORTANT:** Always use `make` commands for building and testing. Do not use `go build` or `go test` directly.
+
+```bash
+# Build the binary (outputs to ./bin/llmc)
+make build
+
+# Run tests
+make test
+
+# Format code
+make fmt
+
+# Vet code
+make vet
+
+# Tidy dependencies
+make tidy
+
+# Clean build artifacts
+make clean
+
+# Show all available make targets
+make help
+```
+
+### Running Without Installing
+
+```bash
+# Run directly with go run
+go run main.go [command]
+
+# Examples
+go run main.go chat "Your message"
+go run main.go prompts
+go run main.go config
+```
+
 ## Configuration
 
 LLMC supports multiple configuration methods with the following priority (higher priority overrides lower):
@@ -453,13 +496,27 @@ You can also create prompt files in multiple directories. The tool will search f
 List available prompt templates:
 ```bash
 # List all available prompts (shows in table format with file paths)
-llmc prompt
+llmc prompts
 
 # List prompts with verbose output (shows duplicate file warnings)
-llmc prompt --verbose
+llmc prompts --verbose
 ```
 
-The prompt list is displayed in a table format showing the prompt name and the full file path. When using `--verbose`, the tool will show warnings if the same prompt file name exists in multiple directories, indicating which directory's file will be used.
+The prompt list is displayed in a table format with the following columns:
+- **PROMPT**: The prompt name (relative path from prompt directory)
+- **MODEL**: The model specified in the prompt (or default model in parentheses if not specified)
+- **WEB SEARCH**: Whether web search is enabled in the prompt (`enabled`/`disabled`, or default setting in parentheses if not specified)
+- **FILE PATH**: The full path to the prompt file
+
+Example output:
+```
+PROMPT           MODEL                      WEB SEARCH  FILE PATH
+---------------  -------------------------  ----------  -----------------------------------------------
+commit           (gemini:gemini-2.5-flash)  (disabled)  /home/user/.config/llmc/prompts/commit.toml
+code-review      openai:gpt-4o              enabled     /home/user/.config/llmc/prompts/code-review.toml
+```
+
+Values in parentheses indicate that the setting is not specified in the prompt file and will use the default configuration value. When using `--verbose`, the tool will show warnings if the same prompt file name exists in multiple directories, indicating which directory's file will be used.
 
 Use the prompt:
 ```bash
@@ -604,7 +661,7 @@ Users can then override these by creating files with the same names in their `$H
 
 Use the `--verbose` flag to see which file will be used for each prompt:
 ```bash
-llmc prompt --verbose
+llmc prompts --verbose
 ```
 
 The prompt list shows the full file path for each prompt, making it easy to see which directory each prompt comes from.
