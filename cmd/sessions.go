@@ -1,13 +1,14 @@
 package cmd
 
 import (
-	"bufio"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 	"text/tabwriter"
 	"time"
 
+	"github.com/chzyer/readline"
 	"github.com/longkey1/llmc/internal/llmc"
 	"github.com/longkey1/llmc/internal/llmc/config"
 	"github.com/longkey1/llmc/internal/llmc/session"
@@ -654,24 +655,41 @@ func runInteractiveMode(sess *session.Session, llmProvider llmc.Provider) error 
 	fmt.Fprintf(os.Stderr, "Type '/help' for commands, '/exit' or 'Ctrl+D' to quit\n")
 	fmt.Fprintf(os.Stderr, "===================================\n\n")
 
-	scanner := bufio.NewScanner(os.Stdin)
+	// Create readline instance with history
+	rl, err := readline.NewEx(&readline.Config{
+		Prompt:          "You> ",
+		HistoryFile:     getHistoryFilePath(),
+		InterruptPrompt: "^C",
+		EOFPrompt:       "exit",
+		Stderr:          os.Stderr,
+	})
+	if err != nil {
+		return fmt.Errorf("creating readline instance: %w", err)
+	}
+	defer rl.Close()
 
 	for {
-		// Display prompt
-		fmt.Fprint(os.Stderr, "You> ")
-
 		// Read input
-		if !scanner.Scan() {
-			// EOF (Ctrl+D) or error
-			if err := scanner.Err(); err != nil {
-				return fmt.Errorf("input error: %w", err)
+		line, err := rl.Readline()
+		if err != nil {
+			if err == readline.ErrInterrupt {
+				// Ctrl+C pressed
+				if len(line) == 0 {
+					// Empty line, exit
+					fmt.Fprintln(os.Stderr, "\nGoodbye!")
+					break
+				}
+				// Line with content, clear it
+				continue
+			} else if err == io.EOF {
+				// Ctrl+D pressed
+				fmt.Fprintln(os.Stderr, "\nGoodbye!")
+				break
 			}
-			// Clean EOF
-			fmt.Fprintln(os.Stderr, "\nGoodbye!")
-			break
+			return fmt.Errorf("input error: %w", err)
 		}
 
-		input := strings.TrimSpace(scanner.Text())
+		input := strings.TrimSpace(line)
 
 		// Skip empty input
 		if input == "" {
@@ -725,6 +743,15 @@ func runInteractiveMode(sess *session.Session, llmProvider llmc.Provider) error 
 	}
 
 	return nil
+}
+
+// getHistoryFilePath returns the path to the readline history file
+func getHistoryFilePath() string {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	return homeDir + "/.config/llmc/history"
 }
 
 // showSpinner displays a spinner animation while waiting for response

@@ -122,12 +122,42 @@ Interactive mode features:
 - **`You>` prompt**: Type your messages naturally
 - **Spinner animation**: Shows "Waiting for response..." while processing
 - **Auto-save**: Session is saved after each turn
+- **Input history**: Command history persisted across sessions (stored in `~/.config/llmc/history`)
+- **Line editing**: Full readline support with cursor movement and editing
 - **Special commands**:
   - `/help` or `/h` - Show available commands
   - `/info` or `/i` - Display session information
   - `/clear` or `/c` - Clear screen (Unix/Linux only)
   - `/exit` or `/quit` or `/q` - Exit interactive mode
   - `Ctrl+D` - Exit interactive mode
+
+#### Input Editing Keybindings
+
+LLMC interactive mode supports standard readline keybindings for text editing:
+
+**Cursor Movement:**
+- `←` / `→` - Move cursor left/right
+- `Ctrl+A` - Move to beginning of line
+- `Ctrl+E` - Move to end of line
+- `Ctrl+B` - Move backward one character (same as ←)
+- `Ctrl+F` - Move forward one character (same as →)
+
+**Editing:**
+- `Backspace` / `Ctrl+H` - Delete character before cursor
+- `Delete` / `Ctrl+D` - Delete character at cursor (exits if line is empty)
+- `Ctrl+W` - Delete word before cursor
+- `Ctrl+U` - Delete from cursor to beginning of line
+- `Ctrl+K` - Delete from cursor to end of line
+
+**History:**
+- `↑` / `↓` - Navigate command history
+- `Ctrl+P` - Previous command (same as ↑)
+- `Ctrl+N` - Next command (same as ↓)
+- `Ctrl+R` - Search command history
+
+**Other:**
+- `Ctrl+C` - Clear current input (exits if input is empty)
+- `Ctrl+D` - Exit interactive mode (when line is empty)
 
 Example interactive session:
 ```
@@ -645,6 +675,13 @@ Values in parentheses indicate defaults from configuration.
 Sessions are stored as JSON files:
 - If using `$HOME/.config/llmc/config.toml`: sessions in `$HOME/.config/llmc/sessions/`
 - If using `--config /path/to/config.toml`: sessions in `/path/to/sessions/`
+
+#### Interactive Mode History
+
+Interactive mode command history is persisted to disk:
+- History file: `$HOME/.config/llmc/history`
+- History is shared across all interactive sessions
+- Arrow keys (↑/↓) navigate through history
 
 ### Prompt Template Format
 
