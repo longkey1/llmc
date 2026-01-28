@@ -68,3 +68,13 @@ func ParseModelString(modelStr string) (string, string, error) {
 
 	return provider, model, nil
 }
+
+// FormatModelString formats provider and model into "provider:model" format.
+//
+// Example:
+//
+//	modelStr := FormatModelString("openai", "gpt-4")
+//	// modelStr = "openai:gpt-4"
+func FormatModelString(provider, model string) string {
+	return fmt.Sprintf("%s:%s", provider, model)
+}
