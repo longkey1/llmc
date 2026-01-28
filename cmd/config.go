@@ -73,18 +73,18 @@ Examples:
 		}
 
 		// Display all configuration values
-		fmt.Printf("ConfigFile: %s\n", viper.ConfigFileUsed())
-		fmt.Printf("OpenAIBaseURL: %s\n", cfg.OpenAIBaseURL)
-		fmt.Printf("OpenAIToken: %s\n", maskToken(cfg.OpenAIToken))
-		fmt.Printf("GeminiBaseURL: %s\n", cfg.GeminiBaseURL)
-		fmt.Printf("GeminiToken: %s\n", maskToken(cfg.GeminiToken))
-		fmt.Printf("AnthropicBaseURL: %s\n", cfg.AnthropicBaseURL)
-		fmt.Printf("AnthropicToken: %s\n", maskToken(cfg.AnthropicToken))
-		fmt.Printf("Model: %s\n", cfg.Model)
+		fmt.Printf("%-20s: %s\n", "ConfigFile", viper.ConfigFileUsed())
+		fmt.Printf("%-20s: %s\n", "OpenAIBaseURL", cfg.OpenAIBaseURL)
+		fmt.Printf("%-20s: %s\n", "OpenAIToken", maskToken(cfg.OpenAIToken))
+		fmt.Printf("%-20s: %s\n", "GeminiBaseURL", cfg.GeminiBaseURL)
+		fmt.Printf("%-20s: %s\n", "GeminiToken", maskToken(cfg.GeminiToken))
+		fmt.Printf("%-20s: %s\n", "AnthropicBaseURL", cfg.AnthropicBaseURL)
+		fmt.Printf("%-20s: %s\n", "AnthropicToken", maskToken(cfg.AnthropicToken))
+		fmt.Printf("%-20s: %s\n", "Model", cfg.Model)
 		// PromptDirs are already absolute paths
-		fmt.Printf("PromptDirectories: %s\n", strings.Join(cfg.PromptDirs, ","))
-		fmt.Printf("WebSearch: %v\n", cfg.EnableWebSearch)
-		fmt.Printf("SessionRetentionDays: %d\n", cfg.SessionRetentionDays)
+		fmt.Printf("%-20s: %s\n", "PromptDirectories", strings.Join(cfg.PromptDirs, ","))
+		fmt.Printf("%-20s: %v\n", "WebSearch", cfg.EnableWebSearch)
+		fmt.Printf("%-20s: %d\n", "SessionRetentionDays", cfg.SessionRetentionDays)
 		return nil
 	},
 }
