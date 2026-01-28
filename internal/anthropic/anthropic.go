@@ -186,13 +186,8 @@ func (p *Provider) ListModels() ([]llmc.ModelInfo, error) {
 	// Convert to ModelInfo format
 	models := make([]llmc.ModelInfo, 0)
 
-	// Extract default model name for comparison
-	defaultModelStr := p.config.GetModel()
-	_, defaultModel, _ := llmc.ParseModelString(defaultModelStr)
-
 	for _, model := range result.Data {
 		id := model.ID
-		isDefault := (id == defaultModel)
 
 		// Use display name as description if available
 		description := model.DisplayName
@@ -206,7 +201,7 @@ func (p *Provider) ListModels() ([]llmc.ModelInfo, error) {
 		models = append(models, llmc.ModelInfo{
 			ID:          id,
 			Description: description,
-			IsDefault:   isDefault,
+			IsDefault:   false, // Set by caller
 		})
 	}
 

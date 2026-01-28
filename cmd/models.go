@@ -40,9 +40,14 @@ Example:
 			return fmt.Errorf("loading config: %w", err)
 		}
 
+		// Save the original default model for comparison
+		originalModel := cfg.Model
+
 		// Determine which providers to list
 		var providers []string
-		if len(args) == 0 {
+		providerExplicitlySpecified := len(args) > 0
+
+		if !providerExplicitlySpecified {
 			// No provider specified, list all
 			providers = []string{openai.ProviderName, gemini.ProviderName, anthropic.ProviderName}
 		} else {
@@ -67,9 +72,23 @@ Example:
 		for _, targetProvider := range providers {
 			result := providerResult{provider: targetProvider}
 
+			// Extract default model ID for this provider
+			var defaultModelID string
+			if originalModel != "" {
+				provider, model, err := llmc.ParseModelString(originalModel)
+				if err == nil && provider == targetProvider {
+					defaultModelID = model
+				}
+			}
+
 			// Get token for the specified provider
 			token, err := cfg.GetToken(targetProvider)
 			if err != nil {
+				// If provider was not explicitly specified, skip silently
+				if !providerExplicitlySpecified {
+					continue
+				}
+				// If provider was explicitly specified, return error
 				result.err = fmt.Errorf("failed to get token: %w", err)
 				results = append(results, result)
 				continue
@@ -116,6 +135,15 @@ Example:
 				result.err = fmt.Errorf("no models returned from API")
 				results = append(results, result)
 				continue
+			}
+
+			// Set IsDefault based on the original default model
+			if defaultModelID != "" {
+				for i := range models {
+					if models[i].ID == defaultModelID {
+						models[i].IsDefault = true
+					}
+				}
 			}
 
 			result.models = models

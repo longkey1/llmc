@@ -231,10 +231,6 @@ func (p *Provider) ListModels() ([]llmc.ModelInfo, error) {
 	// Convert to ModelInfo format
 	models := make([]llmc.ModelInfo, 0)
 
-	// Extract default model name for comparison
-	defaultModelStr := p.config.GetModel()
-	_, defaultModel, _ := llmc.ParseModelString(defaultModelStr)
-
 	for _, model := range result.Models {
 		// Extract model ID from name (remove "models/" prefix)
 		id := strings.TrimPrefix(model.Name, "models/")
@@ -243,8 +239,6 @@ func (p *Provider) ListModels() ([]llmc.ModelInfo, error) {
 		if !contains(model.SupportedGenerationMethods, "generateContent") {
 			continue
 		}
-
-		isDefault := (id == defaultModel)
 
 		// Use API-provided description or displayName
 		description := model.Description
@@ -256,7 +250,7 @@ func (p *Provider) ListModels() ([]llmc.ModelInfo, error) {
 		models = append(models, llmc.ModelInfo{
 			ID:          id,
 			Description: description,
-			IsDefault:   isDefault,
+			IsDefault:   false, // Set by caller
 		})
 	}
 

@@ -357,7 +357,7 @@ llmc sessions clear
 View all available models by fetching real-time data from provider APIs:
 
 ```bash
-# List models from all providers
+# List models from all providers (skips providers without tokens)
 llmc models
 
 # List models for a specific provider
@@ -366,13 +366,15 @@ llmc models gemini
 llmc models anthropic
 ```
 
-**Note**: Requires valid API token for each provider.
+**Token Requirements:**
+- When listing **all providers** (`llmc models`): Providers without configured tokens are silently skipped
+- When listing a **specific provider** (`llmc models openai`): Returns an error if the token is not configured
 
 The output shows:
 - **MODEL**: Full identifier in `provider:model` format
 - **MODEL ID**: Model ID without provider prefix
 - **DEFAULT**: Currently configured model (marked as "Yes")
-- **DESCRIPTION**: Creation date (OpenAI) or description (Gemini)
+- **DESCRIPTION**: Creation date (OpenAI/Anthropic) or description (Gemini)
 
 Example output:
 ```
@@ -380,7 +382,8 @@ Available models for openai:
 
 MODEL              MODEL ID      DEFAULT    DESCRIPTION
 -----------------  ------------  ---------  ----------------------------------
-openai:gpt-4o      gpt-4o        Yes        Created: 2024-05-13 12:00:00 JST
+openai:gpt-5-mini  gpt-5-mini    Yes        Created: 2025-08-06 05:32:08 JST
+openai:gpt-4o      gpt-4o                   Created: 2024-05-13 12:00:00 JST
 openai:gpt-4o-mini gpt-4o-mini              Created: 2024-07-18 12:00:00 JST
 
 Use a model with: llmc chat --model <model> [message]
