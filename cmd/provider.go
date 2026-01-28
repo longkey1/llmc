@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 
+	"github.com/longkey1/llmc/internal/anthropic"
 	"github.com/longkey1/llmc/internal/gemini"
 	"github.com/longkey1/llmc/internal/llmc"
 	"github.com/longkey1/llmc/internal/llmc/config"
@@ -21,7 +22,9 @@ func newProvider(cfg *config.Config) (llmc.Provider, error) {
 		return openai.NewProvider(cfg), nil
 	case gemini.ProviderName:
 		return gemini.NewProvider(cfg), nil
+	case anthropic.ProviderName:
+		return anthropic.NewProvider(cfg), nil
 	default:
-		return nil, fmt.Errorf("unsupported provider: %s (supported: openai, gemini)", provider)
+		return nil, fmt.Errorf("unsupported provider: %s (supported: openai, gemini, anthropic)", provider)
 	}
 }

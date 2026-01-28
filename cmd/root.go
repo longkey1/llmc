@@ -77,16 +77,22 @@ func initConfig() {
 	viper.SetDefault("openai_token", defaultConfig.OpenAIToken)
 	viper.SetDefault("gemini_base_url", defaultConfig.GeminiBaseURL)
 	viper.SetDefault("gemini_token", defaultConfig.GeminiToken)
+	viper.SetDefault("anthropic_base_url", defaultConfig.AnthropicBaseURL)
+	viper.SetDefault("anthropic_token", defaultConfig.AnthropicToken)
 	viper.SetDefault("prompt_dirs", defaultPromptDirs)
 	viper.SetDefault("enable_web_search", defaultConfig.EnableWebSearch)
 	viper.SetDefault("session_message_threshold", defaultConfig.SessionMessageThreshold)
+	viper.SetDefault("session_retention_days", defaultConfig.SessionRetentionDays)
 
 	// Bind environment variables
 	viper.BindEnv("openai_base_url", "LLMC_OPENAI_BASE_URL")
 	viper.BindEnv("openai_token", "LLMC_OPENAI_TOKEN")
 	viper.BindEnv("gemini_base_url", "LLMC_GEMINI_BASE_URL")
 	viper.BindEnv("gemini_token", "LLMC_GEMINI_TOKEN")
+	viper.BindEnv("anthropic_base_url", "LLMC_ANTHROPIC_BASE_URL")
+	viper.BindEnv("anthropic_token", "LLMC_ANTHROPIC_TOKEN")
 	viper.BindEnv("session_message_threshold", "LLMC_SESSION_MESSAGE_THRESHOLD")
+	viper.BindEnv("session_retention_days", "LLMC_SESSION_RETENTION_DAYS")
 
 	if cfgFile != "" {
 		// Use config file from the flag.
@@ -140,6 +146,7 @@ func initConfig() {
 		fmt.Fprintln(os.Stderr, "  LLMC_MODEL:", viper.GetString("model"))
 		fmt.Fprintln(os.Stderr, "  LLMC_OPENAI_BASE_URL:", viper.GetString("openai_base_url"))
 		fmt.Fprintln(os.Stderr, "  LLMC_GEMINI_BASE_URL:", viper.GetString("gemini_base_url"))
+		fmt.Fprintln(os.Stderr, "  LLMC_ANTHROPIC_BASE_URL:", viper.GetString("anthropic_base_url"))
 		fmt.Fprintln(os.Stderr, "  LLMC_PROMPT_DIRS:", viper.GetStringSlice("prompt_dirs"))
 		fmt.Fprintln(os.Stderr, "  LLMC_ENABLE_WEB_SEARCH:", viper.GetBool("enable_web_search"))
 	}

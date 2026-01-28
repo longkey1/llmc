@@ -4,7 +4,6 @@ Copyright © 2025 NAME HERE <EMAIL ADDRESS>
 package cmd
 
 import (
-	"bufio"
 	"fmt"
 	"io"
 	"os"
@@ -29,7 +28,6 @@ var (
 	sessionID             string
 	newSession            bool
 	sessionName           string
-	interactive           bool
 	ignoreThreshold       bool
 )
 
@@ -37,9 +35,10 @@ var (
 var chatCmd = &cobra.Command{
 	Use:   "chat [message]",
 	Short: "Send a message to the LLM",
-	Long: `Send a single message to the LLM and print the response.
+	Long: `Send a message to the LLM and print the response.
 This command performs a one-time API call to the specified LLM provider.
-It does not maintain conversation history or provide interactive chat functionality.
+
+For interactive multi-turn conversations, use 'llmc sessions start' instead.
 
 If no message is provided as an argument, it reads from stdin.
 If --editor flag is set, it opens the default editor (from EDITOR environment variable) to compose the message.
@@ -69,34 +68,22 @@ web_search = true  # Optional: enables web search for this prompt"`,
 			return fmt.Errorf("cannot use --prompt with existing session")
 		}
 
-		// Interactive mode requires a session
-		if interactive && sessionID == "" && !newSession {
-			return fmt.Errorf("interactive mode requires --session or --new-session")
-		}
-
-		// Get message from arguments, editor, or stdin (not required for interactive mode)
+		// Get message from arguments, editor, or stdin
 		var message string
-		if !interactive {
-			if useEditor {
-				message, err = getMessageFromEditor()
-				if err != nil {
-					return fmt.Errorf("getting message from editor: %w", err)
-				}
-			} else if len(args) > 0 {
-				message = strings.Join(args, " ")
-			} else {
-				// Read from stdin
-				input, err := io.ReadAll(os.Stdin)
-				if err != nil {
-					return fmt.Errorf("reading from stdin: %w", err)
-				}
-				message = strings.TrimSpace(string(input))
+		if useEditor {
+			message, err = getMessageFromEditor()
+			if err != nil {
+				return fmt.Errorf("getting message from editor: %w", err)
 			}
+		} else if len(args) > 0 {
+			message = strings.Join(args, " ")
 		} else {
-			// Interactive mode: optional initial message
-			if len(args) > 0 {
-				message = strings.Join(args, " ")
+			// Read from stdin
+			input, err := io.ReadAll(os.Stdin)
+			if err != nil {
+				return fmt.Errorf("reading from stdin: %w", err)
 			}
+			message = strings.TrimSpace(string(input))
 		}
 
 		// Determine session mode
@@ -135,11 +122,11 @@ web_search = true  # Optional: enables web search for this prompt"`,
 
 			// Use session's system prompt and model
 			systemPrompt = sess.SystemPrompt
-			cfg.Model = sess.Provider + ":" + sess.Model
+			cfg.Model = sess.Model
 
 			if verbose {
 				fmt.Fprintf(os.Stderr, "Continuing session: %s\n", sess.GetShortID())
-				fmt.Fprintf(os.Stderr, "Model: %s:%s\n", sess.Provider, sess.Model)
+				fmt.Fprintf(os.Stderr, "Model: %s\n", sess.Model)
 				if systemPrompt != "" {
 					fmt.Fprintf(os.Stderr, "System prompt: %s\n", systemPrompt)
 				}
@@ -198,21 +185,15 @@ web_search = true  # Optional: enables web search for this prompt"`,
 				cfg.Model = envModel
 			}
 
-			// Parse provider and model
-			provider, modelName, err := llmc.ParseModelString(cfg.Model)
-			if err != nil {
-				return fmt.Errorf("invalid model format: %w", err)
-			}
-
 			// Create new session
-			sess = session.NewSession(provider, modelName)
+			sess = session.NewSession(cfg.Model)
 			sess.Name = sessionName
 			sess.TemplateName = prompt
 			sess.SystemPrompt = systemPrompt
 
 			if verbose {
 				fmt.Fprintf(os.Stderr, "Creating new session: %s\n", sess.GetShortID())
-				fmt.Fprintf(os.Stderr, "Model: %s:%s\n", provider, modelName)
+				fmt.Fprintf(os.Stderr, "Model: %s\n", sess.Model)
 				if systemPrompt != "" {
 					fmt.Fprintf(os.Stderr, "System prompt: %s\n", systemPrompt)
 				}
@@ -308,46 +289,38 @@ web_search = true  # Optional: enables web search for this prompt"`,
 		llmProvider.SetIgnoreWebSearchErrors(enableIgnoreWebSearchErrors)
 		llmProvider.SetDebug(verbose)
 
-		// If message is provided, send it
-		if message != "" {
-			// Session mode: add message to session
-			sess.AddMessage("user", message)
+		// Session mode: add message to session
+		sess.AddMessage("user", message)
 
-			// Send message with history (exclude the last message which was just added)
-			historyMessages := sess.Messages[:len(sess.Messages)-1]
-			response, err := llmProvider.ChatWithHistory(sess.SystemPrompt, historyMessages, message)
-			if err != nil {
-				return fmt.Errorf("chat request failed: %w", err)
-			}
+		// Send message with history (exclude the last message which was just added)
+		historyMessages := sess.Messages[:len(sess.Messages)-1]
 
-			// Add assistant response to session
-			sess.AddMessage("assistant", response)
+		response, err := llmProvider.ChatWithHistory(sess.SystemPrompt, historyMessages, message)
 
-			// Save session
-			if err := session.SaveSession(sess); err != nil {
-				return fmt.Errorf("saving session: %w", err)
-			}
-
-			// Print response
-			fmt.Println(response)
+		if err != nil {
+			return fmt.Errorf("chat request failed: %w", err)
 		}
+
+		// Add assistant response to session
+		sess.AddMessage("assistant", response)
+
+		// Save session
+		if err := session.SaveSession(sess); err != nil {
+			return fmt.Errorf("saving session: %w", err)
+		}
+
+		// Print response
+		fmt.Println(response)
 
 		// If new session, print session info
 		if isNewSession {
 			fmt.Fprintf(os.Stderr, "\nSession created: %s\n", sess.GetShortID())
 			sessionDir, _ := session.GetSessionDir()
 			fmt.Fprintf(os.Stderr, "Path: %s/%s.json\n", sessionDir, sess.ID)
-			if !interactive {
-				fmt.Fprintf(os.Stderr, "\nNext time, use:\n  llmc chat -s %s \"your message\"\n", sess.GetShortID())
-			}
+			fmt.Fprintf(os.Stderr, "\nNext time, use:\n  llmc chat -s %s \"your message\"\n", sess.GetShortID())
+			fmt.Fprintf(os.Stderr, "For interactive mode, use:\n  llmc sessions start %s\n", sess.GetShortID())
 		}
 
-		// If interactive mode, start the loop
-		if interactive {
-			if err := runInteractiveMode(sess, llmProvider); err != nil {
-				return fmt.Errorf("interactive mode: %w", err)
-			}
-		}
 		return nil
 	},
 }
@@ -400,129 +373,5 @@ func init() {
 	chatCmd.Flags().StringVarP(&sessionID, "session", "s", "", "Session ID (short or full UUID, or 'latest' for most recent session)")
 	chatCmd.Flags().BoolVarP(&newSession, "new-session", "n", false, "Create a new session")
 	chatCmd.Flags().StringVar(&sessionName, "session-name", "", "Name for the new session (optional)")
-	chatCmd.Flags().BoolVarP(&interactive, "interactive", "i", false, "Start interactive mode for multi-turn conversations")
 	chatCmd.Flags().BoolVar(&ignoreThreshold, "ignore-threshold", false, "Ignore session message threshold warning")
-}
-
-// runInteractiveMode starts an interactive chat session
-func runInteractiveMode(sess *session.Session, llmProvider llmc.Provider) error {
-	// Print session header
-	fmt.Fprintf(os.Stderr, "\n=== Interactive Session [%s] ===\n", sess.GetShortID())
-	fmt.Fprintf(os.Stderr, "Provider: %s, Model: %s\n", sess.Provider, sess.Model)
-	if sess.SystemPrompt != "" {
-		fmt.Fprintf(os.Stderr, "System Prompt: %s\n", sess.SystemPrompt)
-	}
-	fmt.Fprintf(os.Stderr, "Type '/help' for commands, '/exit' or 'Ctrl+D' to quit\n")
-	fmt.Fprintf(os.Stderr, "===================================\n\n")
-
-	scanner := bufio.NewScanner(os.Stdin)
-
-	for {
-		// Display prompt
-		fmt.Fprint(os.Stderr, "You> ")
-
-		// Read input
-		if !scanner.Scan() {
-			// EOF (Ctrl+D) or error
-			if err := scanner.Err(); err != nil {
-				return fmt.Errorf("input error: %w", err)
-			}
-			// Clean EOF
-			fmt.Fprintln(os.Stderr, "\nGoodbye!")
-			break
-		}
-
-		input := strings.TrimSpace(scanner.Text())
-
-		// Skip empty input
-		if input == "" {
-			continue
-		}
-
-		// Handle special commands
-		if strings.HasPrefix(input, "/") {
-			if handleSpecialCommand(input, sess) {
-				// Continue loop if command was handled
-				continue
-			}
-			// Exit if command returned false
-			break
-		}
-
-		// Add user message to session
-		sess.AddMessage("user", input)
-
-		// Get conversation history (excluding the just-added message)
-		historyMessages := sess.Messages[:len(sess.Messages)-1]
-
-		// Send message with history
-		response, err := llmProvider.ChatWithHistory(sess.SystemPrompt, historyMessages, input)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			// Remove the failed message from history
-			sess.Messages = sess.Messages[:len(sess.Messages)-1]
-			continue
-		}
-
-		// Add assistant response
-		sess.AddMessage("assistant", response)
-
-		// Save session after each turn
-		if err := session.SaveSession(sess); err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: failed to save session: %v\n", err)
-		}
-
-		// Print response
-		fmt.Printf("\nAssistant> %s\n\n", response)
-	}
-
-	return nil
-}
-
-// handleSpecialCommand processes special commands in interactive mode
-// Returns true to continue the loop, false to exit
-func handleSpecialCommand(command string, sess *session.Session) bool {
-	command = strings.ToLower(strings.TrimSpace(command))
-
-	switch command {
-	case "/help", "/h":
-		fmt.Fprintln(os.Stderr, "\nAvailable commands:")
-		fmt.Fprintln(os.Stderr, "  /help, /h     - Show this help message")
-		fmt.Fprintln(os.Stderr, "  /info, /i     - Show session information")
-		fmt.Fprintln(os.Stderr, "  /clear, /c    - Clear screen (Unix/Linux only)")
-		fmt.Fprintln(os.Stderr, "  /exit, /quit  - Exit interactive mode")
-		fmt.Fprintln(os.Stderr, "  Ctrl+D        - Exit interactive mode")
-		fmt.Fprintln(os.Stderr, "")
-		return true
-
-	case "/info", "/i":
-		fmt.Fprintln(os.Stderr, "\nSession Information:")
-		fmt.Fprintf(os.Stderr, "  ID: %s\n", sess.GetShortID())
-		fmt.Fprintf(os.Stderr, "  Full ID: %s\n", sess.ID)
-		if sess.Name != "" {
-			fmt.Fprintf(os.Stderr, "  Name: %s\n", sess.Name)
-		}
-		fmt.Fprintf(os.Stderr, "  Provider: %s\n", sess.Provider)
-		fmt.Fprintf(os.Stderr, "  Model: %s\n", sess.Model)
-		fmt.Fprintf(os.Stderr, "  Messages: %d\n", sess.MessageCount())
-		fmt.Fprintf(os.Stderr, "  Created: %s\n", sess.CreatedAt.Format("2006-01-02 15:04:05"))
-		if sess.TemplateName != "" {
-			fmt.Fprintf(os.Stderr, "  Template: %s\n", sess.TemplateName)
-		}
-		fmt.Fprintln(os.Stderr, "")
-		return true
-
-	case "/clear", "/c":
-		// Clear screen (Unix/Linux)
-		fmt.Print("\033[H\033[2J")
-		return true
-
-	case "/exit", "/quit", "/q":
-		fmt.Fprintln(os.Stderr, "Goodbye!")
-		return false
-
-	default:
-		fmt.Fprintf(os.Stderr, "Unknown command: %s (type '/help' for available commands)\n", command)
-		return true
-	}
 }

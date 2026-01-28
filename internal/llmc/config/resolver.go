@@ -18,6 +18,8 @@ func (c *Config) GetBaseURL(provider string) (string, error) {
 		baseURLValue = c.OpenAIBaseURL
 	case "gemini":
 		baseURLValue = c.GeminiBaseURL
+	case "anthropic":
+		baseURLValue = c.AnthropicBaseURL
 	default:
 		return "", fmt.Errorf("unsupported provider: %s", provider)
 	}
@@ -53,6 +55,8 @@ func (c *Config) GetToken(provider string) (string, error) {
 		tokenValue = c.OpenAIToken
 	case "gemini":
 		tokenValue = c.GeminiToken
+	case "anthropic":
+		tokenValue = c.AnthropicToken
 	default:
 		return "", fmt.Errorf("unsupported provider: %s", provider)
 	}

@@ -21,9 +21,8 @@ func (e *AmbiguousIDError) Error() string {
 	var lines []string
 	lines = append(lines, fmt.Sprintf("Ambiguous session ID %q. Multiple matches found:", e.Prefix))
 	for _, match := range e.Matches {
-		lines = append(lines, fmt.Sprintf("- %s (%s:%s, %s, %d messages)",
+		lines = append(lines, fmt.Sprintf("- %s (%s, %s, %d messages)",
 			match.GetShortID(),
-			match.Provider,
 			match.Model,
 			match.CreatedAt.Format("2006-01-02"),
 			match.MessageCount()))

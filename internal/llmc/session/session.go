@@ -14,15 +14,14 @@ type Session struct {
 	Name         string         `json:"name"`          // Optional session name (empty by default)
 	TemplateName string         `json:"template_name"` // Prompt template name (reference info, can be empty)
 	SystemPrompt string         `json:"system_prompt"` // System prompt snapshot (can be empty)
-	Provider     string         `json:"provider"`      // Provider name ("openai" or "gemini")
-	Model        string         `json:"model"`         // Model name (without provider prefix)
+	Model        string         `json:"model"`         // Model in "provider:model" format (e.g., "openai:gpt-4")
 	CreatedAt    time.Time      `json:"created_at"`
 	UpdatedAt    time.Time      `json:"updated_at"`
 	Messages     []llmc.Message `json:"messages"`
 }
 
-// NewSession creates a new session with the given provider and model
-func NewSession(provider, model string) *Session {
+// NewSession creates a new session with the given model in "provider:model" format
+func NewSession(model string) *Session {
 	now := time.Now()
 	return &Session{
 		ID:           uuid.New().String(),
@@ -30,7 +29,6 @@ func NewSession(provider, model string) *Session {
 		Name:         "",
 		TemplateName: "",
 		SystemPrompt: "",
-		Provider:     provider,
 		Model:        model,
 		CreatedAt:    now,
 		UpdatedAt:    now,
@@ -68,4 +66,22 @@ func (s *Session) GetDisplayName() string {
 // MessageCount returns the number of messages in the session
 func (s *Session) MessageCount() int {
 	return len(s.Messages)
+}
+
+// GetProvider extracts the provider name from the model string
+func (s *Session) GetProvider() string {
+	provider, _, err := llmc.ParseModelString(s.Model)
+	if err != nil {
+		return ""
+	}
+	return provider
+}
+
+// GetModelName extracts the model name from the model string
+func (s *Session) GetModelName() string {
+	_, model, err := llmc.ParseModelString(s.Model)
+	if err != nil {
+		return s.Model
+	}
+	return model
 }

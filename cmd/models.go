@@ -8,6 +8,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/longkey1/llmc/internal/anthropic"
 	"github.com/longkey1/llmc/internal/gemini"
 	"github.com/longkey1/llmc/internal/llmc"
 	"github.com/longkey1/llmc/internal/llmc/config"
@@ -22,14 +23,15 @@ var modelsCmd = &cobra.Command{
 	Long: `List all available models for the specified provider.
 Fetches the latest model information directly from the provider's API.
 
-Supported providers: openai, gemini
+Supported providers: openai, gemini, anthropic
 
 If no provider is specified, lists models from all providers.
 
 Example:
-  llmc models           # List models from all providers
-  llmc models openai    # List OpenAI models
-  llmc models gemini    # List Gemini models`,
+  llmc models              # List models from all providers
+  llmc models openai       # List OpenAI models
+  llmc models gemini       # List Gemini models
+  llmc models anthropic    # List Anthropic models`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// Load config to get tokens
@@ -42,12 +44,12 @@ Example:
 		var providers []string
 		if len(args) == 0 {
 			// No provider specified, list all
-			providers = []string{openai.ProviderName, gemini.ProviderName}
+			providers = []string{openai.ProviderName, gemini.ProviderName, anthropic.ProviderName}
 		} else {
 			targetProvider := args[0]
 			// Validate provider
-			if targetProvider != openai.ProviderName && targetProvider != gemini.ProviderName {
-				return fmt.Errorf("unsupported provider '%s'\nSupported providers: openai, gemini", targetProvider)
+			if targetProvider != openai.ProviderName && targetProvider != gemini.ProviderName && targetProvider != anthropic.ProviderName {
+				return fmt.Errorf("unsupported provider '%s'\nSupported providers: openai, gemini, anthropic", targetProvider)
 			}
 			providers = []string{targetProvider}
 		}
@@ -77,8 +79,10 @@ Example:
 			cfg.Model = llmc.FormatModelString(targetProvider, "temp")
 			if targetProvider == openai.ProviderName {
 				cfg.OpenAIToken = token
-			} else {
+			} else if targetProvider == gemini.ProviderName {
 				cfg.GeminiToken = token
+			} else if targetProvider == anthropic.ProviderName {
+				cfg.AnthropicToken = token
 			}
 
 			if verbose {
@@ -92,8 +96,12 @@ Example:
 				provider := openai.NewProvider(cfg)
 				provider.SetDebug(verbose)
 				models, modelsErr = provider.ListModels()
-			} else {
+			} else if targetProvider == gemini.ProviderName {
 				provider := gemini.NewProvider(cfg)
+				provider.SetDebug(verbose)
+				models, modelsErr = provider.ListModels()
+			} else if targetProvider == anthropic.ProviderName {
+				provider := anthropic.NewProvider(cfg)
 				provider.SetDebug(verbose)
 				models, modelsErr = provider.ListModels()
 			}

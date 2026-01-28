@@ -14,10 +14,13 @@ type Config struct {
 	OpenAIToken             string   `toml:"openai_token" mapstructure:"openai_token"`
 	GeminiBaseURL           string   `toml:"gemini_base_url" mapstructure:"gemini_base_url"`
 	GeminiToken             string   `toml:"gemini_token" mapstructure:"gemini_token"`
+	AnthropicBaseURL        string   `toml:"anthropic_base_url" mapstructure:"anthropic_base_url"`
+	AnthropicToken          string   `toml:"anthropic_token" mapstructure:"anthropic_token"`
 	PromptDirs              []string `toml:"prompt_dirs" mapstructure:"prompt_dirs"`
 	EnableWebSearch         bool     `toml:"enable_web_search" mapstructure:"enable_web_search"`
 	IgnoreWebSearchErrors   bool     `toml:"ignore_web_search_errors" mapstructure:"ignore_web_search_errors"`
 	SessionMessageThreshold int      `toml:"session_message_threshold" mapstructure:"session_message_threshold"` // 0 = disabled
+	SessionRetentionDays    int      `toml:"session_retention_days" mapstructure:"session_retention_days"`       // Number of days to retain sessions (default: 30)
 }
 
 // GetModel returns the model name
@@ -45,10 +48,13 @@ func NewDefaultConfig(promptDir string) *Config {
 		OpenAIToken:             "$OPENAI_API_KEY", // Default to env var
 		GeminiBaseURL:           "https://generativelanguage.googleapis.com/v1beta",
 		GeminiToken:             "$GEMINI_API_KEY",
+		AnthropicBaseURL:        "https://api.anthropic.com/v1",
+		AnthropicToken:          "$ANTHROPIC_API_KEY",
 		PromptDirs:              []string{promptDir},
 		EnableWebSearch:         false,
 		IgnoreWebSearchErrors:   false,
 		SessionMessageThreshold: 50, // Default threshold (0 = disabled)
+		SessionRetentionDays:    30, // Default: delete sessions older than 30 days
 	}
 }
 
