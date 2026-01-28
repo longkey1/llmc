@@ -52,16 +52,24 @@ Example:
 			providers = []string{targetProvider}
 		}
 
+		// Collect results and errors for all providers
+		type providerResult struct {
+			provider string
+			models   []llmc.ModelInfo
+			err      error
+		}
+
+		var results []providerResult
+
 		// List models for each provider
-		for i, targetProvider := range providers {
-			if i > 0 {
-				fmt.Println() // Add blank line between providers
-			}
+		for _, targetProvider := range providers {
+			result := providerResult{provider: targetProvider}
 
 			// Get token for the specified provider
 			token, err := cfg.GetToken(targetProvider)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "Warning: Skipping %s - %v\n", targetProvider, err)
+				result.err = fmt.Errorf("failed to get token: %w", err)
+				results = append(results, result)
 				continue
 			}
 
@@ -91,50 +99,90 @@ Example:
 			}
 
 			if modelsErr != nil {
-				fmt.Fprintf(os.Stderr, "Warning: Failed to list models for %s - %v\n", targetProvider, modelsErr)
+				result.err = fmt.Errorf("failed to list models: %w", modelsErr)
+				results = append(results, result)
 				continue
 			}
 
 			if len(models) == 0 {
-				fmt.Fprintf(os.Stderr, "Warning: No models returned from %s API\n", targetProvider)
+				result.err = fmt.Errorf("no models returned from API")
+				results = append(results, result)
 				continue
 			}
 
-			// Display provider name
-			fmt.Printf("Available models for %s:\n\n", targetProvider)
+			result.models = models
+			results = append(results, result)
+		}
 
-			// Calculate column width for model names (provider:model format)
+		// Display successful results first
+		successCount := 0
+		for _, result := range results {
+			if result.err != nil {
+				continue
+			}
+
+			if successCount > 0 {
+				fmt.Println() // Add blank line between providers
+			}
+			successCount++
+
+			// Display provider name
+			fmt.Printf("Available models for %s:\n\n", result.provider)
+
+			// Calculate column widths
 			maxModelWidth := 15
-			for _, model := range models {
-				modelName := llmc.FormatModelString(targetProvider, model.ID)
+			maxModelIDWidth := 15
+			for _, model := range result.models {
+				modelName := llmc.FormatModelString(result.provider, model.ID)
 				if len(modelName) > maxModelWidth {
 					maxModelWidth = len(modelName)
+				}
+				if len(model.ID) > maxModelIDWidth {
+					maxModelIDWidth = len(model.ID)
 				}
 			}
 
 			// Display header
-			fmt.Printf("%-*s  %-10s  %s\n", maxModelWidth, "MODEL", "DEFAULT", "DESCRIPTION")
-			fmt.Printf("%s  %s  %s\n",
+			fmt.Printf("%-*s  %-*s  %-10s  %s\n", maxModelWidth, "MODEL", maxModelIDWidth, "MODEL ID", "DEFAULT", "DESCRIPTION")
+			fmt.Printf("%s  %s  %s  %s\n",
 				strings.Repeat("-", maxModelWidth),
+				strings.Repeat("-", maxModelIDWidth),
 				strings.Repeat("-", 10),
 				strings.Repeat("-", 50))
 
 			// Display models
-			for _, model := range models {
+			for _, model := range result.models {
 				defaultMark := ""
 				if model.IsDefault {
 					defaultMark = "Yes"
 				}
-				modelName := llmc.FormatModelString(targetProvider, model.ID)
-				fmt.Printf("%-*s  %-10s  %s\n",
+				modelName := llmc.FormatModelString(result.provider, model.ID)
+				fmt.Printf("%-*s  %-*s  %-10s  %s\n",
 					maxModelWidth,
 					modelName,
+					maxModelIDWidth,
+					model.ID,
 					defaultMark,
 					model.Description)
 			}
 
 			// Usage hint
 			fmt.Printf("\nUse a model with: llmc chat --model <model> [message]\n")
+		}
+
+		// Display errors at the end
+		errorCount := 0
+		for _, result := range results {
+			if result.err == nil {
+				continue
+			}
+
+			if errorCount == 0 && successCount > 0 {
+				fmt.Println() // Add blank line before error section
+			}
+			errorCount++
+
+			fmt.Fprintf(os.Stderr, "Warning: Skipping %s - %v\n", result.provider, result.err)
 		}
 
 		return nil
