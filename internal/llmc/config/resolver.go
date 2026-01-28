@@ -9,8 +9,34 @@ import (
 	"github.com/spf13/viper"
 )
 
+// expandEnvVar expands environment variable references in the given value
+// Supports both $VAR and ${VAR} syntax
+// Returns the expanded value. If the environment variable is not set, returns empty string.
+func expandEnvVar(value string) (string, error) {
+	// Check if it's an environment variable reference
+	if !strings.HasPrefix(value, "$") {
+		// Not an environment variable reference, return as-is
+		return value, nil
+	}
+
+	var envVarName string
+	// Support both $VAR and ${VAR} syntax
+	if strings.HasPrefix(value, "${") && strings.HasSuffix(value, "}") {
+		// Extract variable name from ${VAR} format
+		envVarName = value[2 : len(value)-1]
+	} else {
+		// Extract variable name from $VAR format
+		envVarName = strings.TrimPrefix(value, "$")
+	}
+
+	// Get environment variable value
+	// If not set, return empty string (no error)
+	envValue := os.Getenv(envVarName)
+	return envValue, nil
+}
+
 // GetBaseURL returns the base URL for the specified provider
-// Resolves environment variable if value starts with "$" or "${"
+// Environment variables are already expanded during LoadConfig()
 func (c *Config) GetBaseURL(provider string) (string, error) {
 	var baseURLValue string
 	switch provider {
@@ -24,30 +50,16 @@ func (c *Config) GetBaseURL(provider string) (string, error) {
 		return "", fmt.Errorf("unsupported provider: %s", provider)
 	}
 
-	// Check if it's an environment variable reference
-	if strings.HasPrefix(baseURLValue, "$") {
-		var envVarName string
-		// Support both $VAR and ${VAR} syntax
-		if strings.HasPrefix(baseURLValue, "${") && strings.HasSuffix(baseURLValue, "}") {
-			// Extract variable name from ${VAR} format
-			envVarName = baseURLValue[2 : len(baseURLValue)-1]
-		} else {
-			// Extract variable name from $VAR format
-			envVarName = strings.TrimPrefix(baseURLValue, "$")
-		}
-
-		envValue := os.Getenv(envVarName)
-		if envValue == "" {
-			return "", fmt.Errorf("environment variable %s is not set or empty", envVarName)
-		}
-		return envValue, nil
+	// Validate that base URL is not empty
+	if baseURLValue == "" {
+		return "", fmt.Errorf("%s base URL is not configured. Set it in config file (%s_base_url) or environment variable (LLMC_%s_BASE_URL)", provider, provider, strings.ToUpper(provider))
 	}
 
 	return baseURLValue, nil
 }
 
 // GetToken returns the token for the specified provider
-// Resolves environment variable if value starts with "$" or "${"
+// Environment variables are already expanded during LoadConfig()
 func (c *Config) GetToken(provider string) (string, error) {
 	var tokenValue string
 	switch provider {
@@ -59,25 +71,6 @@ func (c *Config) GetToken(provider string) (string, error) {
 		tokenValue = c.AnthropicToken
 	default:
 		return "", fmt.Errorf("unsupported provider: %s", provider)
-	}
-
-	// Check if it's an environment variable reference
-	if strings.HasPrefix(tokenValue, "$") {
-		var envVarName string
-		// Support both $VAR and ${VAR} syntax
-		if strings.HasPrefix(tokenValue, "${") && strings.HasSuffix(tokenValue, "}") {
-			// Extract variable name from ${VAR} format
-			envVarName = tokenValue[2 : len(tokenValue)-1]
-		} else {
-			// Extract variable name from $VAR format
-			envVarName = strings.TrimPrefix(tokenValue, "$")
-		}
-
-		envValue := os.Getenv(envVarName)
-		if envValue == "" {
-			return "", fmt.Errorf("environment variable %s is not set or empty", envVarName)
-		}
-		return envValue, nil
 	}
 
 	// Validate that token is not empty

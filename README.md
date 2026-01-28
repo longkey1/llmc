@@ -393,21 +393,46 @@ llmc init
 2. Edit the configuration file at `$HOME/.config/llmc/config.toml`:
 ```toml
 model = "openai:gpt-4.1"  # Format: provider:model
-openai_token = "$OPENAI_API_KEY"  # Use $VAR or ${VAR} for environment variables
-gemini_token = "${GEMINI_API_KEY}"
-anthropic_token = "${ANTHROPIC_API_KEY}"
 enable_web_search = false
 session_retention_days = 30  # Delete sessions older than 30 days (default)
+
+# Option 1: Reference environment variables (recommended for security)
+openai_token = "$OPENAI_API_KEY"      # or "${OPENAI_API_KEY}"
+gemini_token = "$GEMINI_API_KEY"      # or "${GEMINI_API_KEY}"
+anthropic_token = "$ANTHROPIC_API_KEY"  # or "${ANTHROPIC_API_KEY}"
+
+# Option 2: Set tokens directly (not recommended for shared configs)
+# openai_token = "sk-..."
+# gemini_token = "..."
+# anthropic_token = "..."
+
+# Option 3: Use environment variables (no config file changes needed)
+# export LLMC_OPENAI_TOKEN="sk-..."
+# export LLMC_GEMINI_TOKEN="..."
+# export LLMC_ANTHROPIC_TOKEN="..."
 ```
 
-3. View current configuration:
+3. Set your API token (choose one method):
+```bash
+# Method 1: Set environment variable (simplest)
+export OPENAI_API_KEY="sk-..."
+# Then reference it in config: openai_token = "$OPENAI_API_KEY"
+
+# Method 2: Use LLMC-specific environment variable (no config file changes)
+export LLMC_OPENAI_TOKEN="sk-..."
+
+# Method 3: Set directly in config file (not recommended for shared configs)
+# openai_token = "sk-..."
+```
+
+4. View current configuration:
 ```bash
 # Show all configuration
 llmc config
 
 # Show specific field
 llmc config model
-llmc config openai_token
+llmc config openai_token  # Shows masked token or "(not set)"
 ```
 
 ### Configuration Priority
@@ -497,16 +522,28 @@ Complete configuration file example:
 
 ```toml
 model = "openai:gpt-4.1"  # Format: provider:model
-openai_base_url = "https://api.openai.com/v1"  # Optional: supports $VAR or ${VAR}
-openai_token = "$OPENAI_API_KEY"  # Use environment variable reference
-gemini_base_url = "https://generativelanguage.googleapis.com/v1beta"  # Optional
-gemini_token = "${GEMINI_API_KEY}"  # Both $VAR and ${VAR} supported
-anthropic_base_url = "https://api.anthropic.com/v1"  # Optional
-anthropic_token = "${ANTHROPIC_API_KEY}"  # Both $VAR and ${VAR} supported
-prompt_dirs = ["/path/to/prompts", "/another/directory"]  # Multiple directories
+
+# API tokens - Environment variable references (recommended)
+# Supports both $VAR and ${VAR} syntax
+openai_token = "$OPENAI_API_KEY"        # Expands from environment variable
+gemini_token = "${GEMINI_API_KEY}"      # Both syntaxes work
+anthropic_token = "$ANTHROPIC_API_KEY"
+
+# API base URLs (optional - uses defaults if not set)
+# Also supports environment variable expansion
+openai_base_url = "https://api.openai.com/v1"
+gemini_base_url = "https://generativelanguage.googleapis.com/v1beta"
+anthropic_base_url = "https://api.anthropic.com/v1"
+
+# Prompt directories (optional - uses defaults if not set)
+prompt_dirs = ["/path/to/prompts", "/another/directory"]
+
+# Feature flags
 enable_web_search = false  # Enable web search by default
+
+# Session management
 session_message_threshold = 50  # Warn when session exceeds message count (0 to disable)
-session_retention_days = 30  # Number of days to retain sessions (default: 30)
+session_retention_days = 30     # Number of days to retain sessions (default: 30)
 ```
 
 #### Viewing Configuration
@@ -518,11 +555,11 @@ llmc config
 # Show specific fields
 llmc config model                    # → openai:gpt-4.1
 llmc config openai_base_url          # → https://api.openai.com/v1
-llmc config openai_token             # → sk-... (masked)
+llmc config openai_token             # → sk-... (masked) or "(not set)"
 llmc config gemini_base_url          # → https://generativelanguage.googleapis.com/v1beta
-llmc config gemini_token             # → ... (masked)
+llmc config gemini_token             # → ... (masked) or "(not set)"
 llmc config anthropic_base_url       # → https://api.anthropic.com/v1
-llmc config anthropic_token          # → ... (masked)
+llmc config anthropic_token          # → ... (masked) or "(not set)"
 llmc config promptdirs               # → /path/to/prompts,/another/directory
 llmc config websearch                # → false
 llmc config sessionretentiondays     # → 30

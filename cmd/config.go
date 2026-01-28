@@ -54,11 +54,11 @@ Examples:
 			case "model":
 				fmt.Println(cfg.Model)
 			case "openai_token", "openaitoken":
-				fmt.Println(maskToken(cfg.OpenAIToken))
+				fmt.Println(resolveAndMaskToken(cfg, "openai"))
 			case "gemini_token", "geminitoken":
-				fmt.Println(maskToken(cfg.GeminiToken))
+				fmt.Println(resolveAndMaskToken(cfg, "gemini"))
 			case "anthropic_token", "anthropictoken":
-				fmt.Println(maskToken(cfg.AnthropicToken))
+				fmt.Println(resolveAndMaskToken(cfg, "anthropic"))
 			case "promptdirs":
 				// PromptDirs are already absolute paths
 				fmt.Println(strings.Join(cfg.PromptDirs, ","))
@@ -75,11 +75,11 @@ Examples:
 		// Display all configuration values
 		fmt.Printf("%-20s: %s\n", "ConfigFile", viper.ConfigFileUsed())
 		fmt.Printf("%-20s: %s\n", "OpenAIBaseURL", cfg.OpenAIBaseURL)
-		fmt.Printf("%-20s: %s\n", "OpenAIToken", maskToken(cfg.OpenAIToken))
+		fmt.Printf("%-20s: %s\n", "OpenAIToken", resolveAndMaskToken(cfg, "openai"))
 		fmt.Printf("%-20s: %s\n", "GeminiBaseURL", cfg.GeminiBaseURL)
-		fmt.Printf("%-20s: %s\n", "GeminiToken", maskToken(cfg.GeminiToken))
+		fmt.Printf("%-20s: %s\n", "GeminiToken", resolveAndMaskToken(cfg, "gemini"))
 		fmt.Printf("%-20s: %s\n", "AnthropicBaseURL", cfg.AnthropicBaseURL)
-		fmt.Printf("%-20s: %s\n", "AnthropicToken", maskToken(cfg.AnthropicToken))
+		fmt.Printf("%-20s: %s\n", "AnthropicToken", resolveAndMaskToken(cfg, "anthropic"))
 		fmt.Printf("%-20s: %s\n", "Model", cfg.Model)
 		// PromptDirs are already absolute paths
 		fmt.Printf("%-20s: %s\n", "PromptDirectories", strings.Join(cfg.PromptDirs, ","))
@@ -95,6 +95,16 @@ func maskToken(token string) string {
 		return "********"
 	}
 	return token[:4] + "..." + token[len(token)-4:]
+}
+
+// resolveAndMaskToken gets the token for the provider and masks it for display
+func resolveAndMaskToken(cfg *config.Config, provider string) string {
+	token, err := cfg.GetToken(provider)
+	if err != nil {
+		// Return error message if token is not set
+		return "(not set)"
+	}
+	return maskToken(token)
 }
 
 func init() {

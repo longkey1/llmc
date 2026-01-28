@@ -44,11 +44,11 @@ func NewDefaultConfig(promptDir string) *Config {
 	return &Config{
 		Model:                   "openai:gpt-4.1", // Changed to "provider:model" format
 		OpenAIBaseURL:           "https://api.openai.com/v1",
-		OpenAIToken:             "$OPENAI_API_KEY", // Default to env var
+		OpenAIToken:             "", // No default, use LLMC_OPENAI_TOKEN env var or set in config file
 		GeminiBaseURL:           "https://generativelanguage.googleapis.com/v1beta",
-		GeminiToken:             "$GEMINI_API_KEY",
+		GeminiToken:             "", // No default, use LLMC_GEMINI_TOKEN env var or set in config file
 		AnthropicBaseURL:        "https://api.anthropic.com/v1",
-		AnthropicToken:          "$ANTHROPIC_API_KEY",
+		AnthropicToken:          "", // No default, use LLMC_ANTHROPIC_TOKEN env var or set in config file
 		PromptDirs:              []string{promptDir},
 		EnableWebSearch:         false,
 		SessionMessageThreshold: 50, // Default threshold (0 = disabled)
@@ -62,6 +62,14 @@ func LoadConfig() (*Config, error) {
 	if err := viper.Unmarshal(config); err != nil {
 		return nil, fmt.Errorf("error unmarshaling config: %v", err)
 	}
+
+	// Expand environment variables in tokens and base URLs
+	config.OpenAIToken, _ = expandEnvVar(config.OpenAIToken)
+	config.GeminiToken, _ = expandEnvVar(config.GeminiToken)
+	config.AnthropicToken, _ = expandEnvVar(config.AnthropicToken)
+	config.OpenAIBaseURL, _ = expandEnvVar(config.OpenAIBaseURL)
+	config.GeminiBaseURL, _ = expandEnvVar(config.GeminiBaseURL)
+	config.AnthropicBaseURL, _ = expandEnvVar(config.AnthropicBaseURL)
 
 	// Convert prompt directories to absolute paths
 	for i, promptDir := range config.PromptDirs {
