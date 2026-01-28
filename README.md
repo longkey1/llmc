@@ -30,7 +30,7 @@ llmc init
 llmc chat "Hello, how are you?"
 
 # 4. Try interactive mode
-llmc chat --new-session -i "Let's have a conversation"
+llmc sessions start
 ```
 
 ## Basic Usage
@@ -109,10 +109,13 @@ Start an interactive chat session with continuous conversation:
 
 ```bash
 # Start interactive mode with a new session
-llmc chat --new-session -i "Hello"
+llmc sessions start
 
 # Start interactive mode with an existing session
-llmc chat -s 550e8400 -i
+llmc sessions start 550e8400
+
+# Start interactive mode with latest session
+llmc sessions start latest
 ```
 
 Interactive mode features:
@@ -179,17 +182,6 @@ Responses include source citations:
 Sources:
 [1] Article Title - https://example.com/article1
 [2] Another Source - https://example.com/article2
-```
-
-**Known Issue: Gemini Empty Responses**
-
-Gemini's web search occasionally returns empty responses. Use `--ignore-web-search-errors` to automatically retry without web search:
-
-```bash
-llmc chat --web-search --ignore-web-search-errors "query"
-
-# Or enable by default in config:
-# ignore_web_search_errors = true
 ```
 
 ### Session Management
@@ -453,9 +445,6 @@ export LLMC_PROMPT_DIRS="/path/to/prompts,/another/directory"
 # Enable web search
 export LLMC_ENABLE_WEB_SEARCH=true
 
-# Automatically retry without web search if it fails (Gemini-specific)
-export LLMC_IGNORE_WEB_SEARCH_ERRORS=true
-
 # Set session message threshold
 export LLMC_SESSION_MESSAGE_THRESHOLD=50
 
@@ -516,7 +505,6 @@ anthropic_base_url = "https://api.anthropic.com/v1"  # Optional
 anthropic_token = "${ANTHROPIC_API_KEY}"  # Both $VAR and ${VAR} supported
 prompt_dirs = ["/path/to/prompts", "/another/directory"]  # Multiple directories
 enable_web_search = false  # Enable web search by default
-ignore_web_search_errors = false  # Auto-retry without web search (Gemini-specific)
 session_message_threshold = 50  # Warn when session exceeds message count (0 to disable)
 session_retention_days = 30  # Number of days to retain sessions (default: 30)
 ```
@@ -537,7 +525,6 @@ llmc config anthropic_base_url       # → https://api.anthropic.com/v1
 llmc config anthropic_token          # → ... (masked)
 llmc config promptdirs               # → /path/to/prompts,/another/directory
 llmc config websearch                # → false
-llmc config ignorewebsearcherrors    # → false
 llmc config sessionretentiondays     # → 30
 llmc config configfile               # → /home/user/.config/llmc/config.toml
 ```

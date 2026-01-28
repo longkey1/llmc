@@ -140,19 +140,17 @@ type Config interface {
 
 // Provider implements the llmc.Provider interface for Gemini
 type Provider struct {
-	config                 Config
-	webSearchEnabled       bool
-	ignoreWebSearchErrors  bool
-	debug                  bool
+	config           Config
+	webSearchEnabled bool
+	debug            bool
 }
 
 // NewProvider creates a new Gemini provider instance
 func NewProvider(config Config) *Provider {
 	return &Provider{
-		config:                config,
-		webSearchEnabled:      false,
-		ignoreWebSearchErrors: false,
-		debug:                 false,
+		config:           config,
+		webSearchEnabled: false,
+		debug:            false,
 	}
 }
 
@@ -161,9 +159,9 @@ func (p *Provider) SetWebSearch(enabled bool) {
 	p.webSearchEnabled = enabled
 }
 
-// SetIgnoreWebSearchErrors enables or disables ignoring web search errors (auto-retry without web search)
+// SetIgnoreWebSearchErrors is kept for interface compatibility (no-op for Gemini)
 func (p *Provider) SetIgnoreWebSearchErrors(enabled bool) {
-	p.ignoreWebSearchErrors = enabled
+	// No-op: auto-retry feature has been removed
 }
 
 // SetDebug enables or disables debug mode
@@ -278,16 +276,7 @@ func (p *Provider) Chat(message string) (string, error) {
 
 	// If web search was enabled but returned empty response
 	if retry && p.webSearchEnabled {
-		// If ignoreWebSearchErrors is enabled, retry without web search
-		if p.ignoreWebSearchErrors {
-			if p.debug {
-				fmt.Fprintf(os.Stderr, "Web search returned empty response, retrying without web search...\n")
-			}
-			response, _, err = p.sendRequest(message, false)
-		} else {
-			// Otherwise, return an error
-			return "", fmt.Errorf("web search did not return a text response (known Gemini API issue). Use --ignore-web-search-errors to automatically retry without web search")
-		}
+		return "", fmt.Errorf("web search returned empty response. Try again without --web-search flag")
 	}
 
 	return response, err
@@ -584,23 +573,10 @@ func (p *Provider) ChatWithHistory(systemPrompt string, messages []llmc.Message,
 		}
 	}
 
-	// If still no content and should retry, retry without web search
-	if shouldRetry && p.ignoreWebSearchErrors {
-		if p.debug {
-			fmt.Fprintf(os.Stderr, "Web search returned empty response, retrying without web search...\n")
-		}
-		// Recursive call without web search (temporarily disable it)
-		originalWebSearch := p.webSearchEnabled
-		p.webSearchEnabled = false
-		response, err := p.ChatWithHistory(systemPrompt, messages, newMessage)
-		p.webSearchEnabled = originalWebSearch
-		return response, err
-	}
-
-	// If still no content and shouldn't retry, return error
+	// If still no content, return error
 	if responseText == "" {
 		if shouldRetry {
-			return "", fmt.Errorf("web search did not return a text response (known Gemini API issue). Use --ignore-web-search-errors to automatically retry without web search")
+			return "", fmt.Errorf("web search returned empty response. Try again without --web-search flag")
 		}
 		if p.debug {
 			return "", fmt.Errorf("no response from API (empty parts)\nRaw response: %s", string(body))

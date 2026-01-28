@@ -18,7 +18,6 @@ type Config struct {
 	AnthropicToken          string   `toml:"anthropic_token" mapstructure:"anthropic_token"`
 	PromptDirs              []string `toml:"prompt_dirs" mapstructure:"prompt_dirs"`
 	EnableWebSearch         bool     `toml:"enable_web_search" mapstructure:"enable_web_search"`
-	IgnoreWebSearchErrors   bool     `toml:"ignore_web_search_errors" mapstructure:"ignore_web_search_errors"`
 	SessionMessageThreshold int      `toml:"session_message_threshold" mapstructure:"session_message_threshold"` // 0 = disabled
 	SessionRetentionDays    int      `toml:"session_retention_days" mapstructure:"session_retention_days"`       // Number of days to retain sessions (default: 30)
 }
@@ -52,7 +51,6 @@ func NewDefaultConfig(promptDir string) *Config {
 		AnthropicToken:          "$ANTHROPIC_API_KEY",
 		PromptDirs:              []string{promptDir},
 		EnableWebSearch:         false,
-		IgnoreWebSearchErrors:   false,
 		SessionMessageThreshold: 50, // Default threshold (0 = disabled)
 		SessionRetentionDays:    30, // Default: delete sessions older than 30 days
 	}

@@ -17,7 +17,7 @@ var configCmd = &cobra.Command{
 This command shows all configuration values loaded from the config file and environment variables.
 
 If a field name is specified, only that field's value is displayed.
-Available fields: configfile, openai_base_url, gemini_base_url, anthropic_base_url, model, openai_token, gemini_token, anthropic_token, promptdirs, websearch, ignorewebsearcherrors, sessionretentiondays
+Available fields: configfile, openai_base_url, gemini_base_url, anthropic_base_url, model, openai_token, gemini_token, anthropic_token, promptdirs, websearch, sessionretentiondays
 
 Examples:
   llmc config                      # Show all configuration
@@ -30,7 +30,6 @@ Examples:
   llmc config anthropic_token     # Show only Anthropic token
   llmc config promptdirs          # Show only prompt directories
   llmc config websearch           # Show only web search setting
-  llmc config ignorewebsearcherrors  # Show only ignore web search errors setting
   llmc config sessionretentiondays   # Show only session retention days setting`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -65,12 +64,10 @@ Examples:
 				fmt.Println(strings.Join(cfg.PromptDirs, ","))
 			case "websearch":
 				fmt.Println(cfg.EnableWebSearch)
-			case "ignorewebsearcherrors":
-				fmt.Println(cfg.IgnoreWebSearchErrors)
 			case "sessionretentiondays":
 				fmt.Println(cfg.SessionRetentionDays)
 			default:
-				return fmt.Errorf("unknown field: %s\nAvailable fields: configfile, openai_base_url, gemini_base_url, anthropic_base_url, model, openai_token, gemini_token, anthropic_token, promptdirs, websearch, ignorewebsearcherrors, sessionretentiondays", args[0])
+				return fmt.Errorf("unknown field: %s\nAvailable fields: configfile, openai_base_url, gemini_base_url, anthropic_base_url, model, openai_token, gemini_token, anthropic_token, promptdirs, websearch, sessionretentiondays", args[0])
 			}
 			return nil
 		}
@@ -87,7 +84,6 @@ Examples:
 		// PromptDirs are already absolute paths
 		fmt.Printf("PromptDirectories: %s\n", strings.Join(cfg.PromptDirs, ","))
 		fmt.Printf("WebSearch: %v\n", cfg.EnableWebSearch)
-		fmt.Printf("IgnoreWebSearchErrors: %v\n", cfg.IgnoreWebSearchErrors)
 		fmt.Printf("SessionRetentionDays: %d\n", cfg.SessionRetentionDays)
 		return nil
 	},

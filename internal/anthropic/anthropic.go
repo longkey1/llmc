@@ -215,6 +215,11 @@ func (p *Provider) ListModels() ([]llmc.ModelInfo, error) {
 
 // Chat sends a message to Anthropic's Messages API and returns the response
 func (p *Provider) Chat(message string) (string, error) {
+	// Check if web search is enabled (not supported by Anthropic)
+	if p.webSearchEnabled {
+		return "", fmt.Errorf("web search is not supported by Anthropic provider")
+	}
+
 	// Extract model name from provider:model format
 	_, modelName, err := llmc.ParseModelString(p.config.GetModel())
 	if err != nil {
@@ -345,6 +350,11 @@ func (p *Provider) Chat(message string) (string, error) {
 
 // ChatWithHistory sends a conversation history with a new message to Anthropic's Messages API
 func (p *Provider) ChatWithHistory(systemPrompt string, messages []llmc.Message, newMessage string) (string, error) {
+	// Check if web search is enabled (not supported by Anthropic)
+	if p.webSearchEnabled {
+		return "", fmt.Errorf("web search is not supported by Anthropic provider")
+	}
+
 	// Extract model name from provider:model format
 	_, modelName, err := llmc.ParseModelString(p.config.GetModel())
 	if err != nil {

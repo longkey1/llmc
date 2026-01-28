@@ -19,16 +19,15 @@ import (
 )
 
 var (
-	model                 string
-	prompt                string
-	argFlags              []string
-	useEditor             bool
-	webSearch             bool
-	ignoreWebSearchErrors bool
-	sessionID             string
-	newSession            bool
-	sessionName           string
-	ignoreThreshold       bool
+	model           string
+	prompt          string
+	argFlags        []string
+	useEditor       bool
+	webSearch       bool
+	sessionID       string
+	newSession      bool
+	sessionName     string
+	ignoreThreshold bool
 )
 
 // chatCmd represents the chat command
@@ -241,16 +240,6 @@ web_search = true  # Optional: enables web search for this prompt"`,
 				enableWebSearch = *promptWebSearch
 			}
 			llmProvider.SetWebSearch(enableWebSearch)
-
-			// Configure ignore web search errors
-			enableIgnoreWebSearchErrors := cfg.IgnoreWebSearchErrors
-			envIgnoreWebSearchErrors := os.Getenv("LLMC_IGNORE_WEB_SEARCH_ERRORS")
-			if cmd.Flags().Changed("ignore-web-search-errors") {
-				enableIgnoreWebSearchErrors = ignoreWebSearchErrors
-			} else if envIgnoreWebSearchErrors != "" {
-				enableIgnoreWebSearchErrors = envIgnoreWebSearchErrors == "true" || envIgnoreWebSearchErrors == "1"
-			}
-			llmProvider.SetIgnoreWebSearchErrors(enableIgnoreWebSearchErrors)
 			llmProvider.SetDebug(verbose)
 
 			// Send message and print response
@@ -277,16 +266,6 @@ web_search = true  # Optional: enables web search for this prompt"`,
 			enableWebSearch = envWebSearch == "true" || envWebSearch == "1"
 		}
 		llmProvider.SetWebSearch(enableWebSearch)
-
-		// Configure ignore web search errors
-		enableIgnoreWebSearchErrors := cfg.IgnoreWebSearchErrors
-		envIgnoreWebSearchErrors := os.Getenv("LLMC_IGNORE_WEB_SEARCH_ERRORS")
-		if cmd.Flags().Changed("ignore-web-search-errors") {
-			enableIgnoreWebSearchErrors = ignoreWebSearchErrors
-		} else if envIgnoreWebSearchErrors != "" {
-			enableIgnoreWebSearchErrors = envIgnoreWebSearchErrors == "true" || envIgnoreWebSearchErrors == "1"
-		}
-		llmProvider.SetIgnoreWebSearchErrors(enableIgnoreWebSearchErrors)
 		llmProvider.SetDebug(verbose)
 
 		// Session mode: add message to session
@@ -367,7 +346,6 @@ func init() {
 	chatCmd.Flags().StringArrayVar(&argFlags, "arg", []string{}, "Key-value pairs for prompt template (format: key:value)")
 	chatCmd.Flags().BoolVarP(&useEditor, "editor", "e", false, "Use default editor (from EDITOR environment variable) to compose message")
 	chatCmd.Flags().BoolVar(&webSearch, "web-search", false, "Enable web search for real-time information")
-	chatCmd.Flags().BoolVar(&ignoreWebSearchErrors, "ignore-web-search-errors", false, "Automatically retry without web search if web search fails to return a response")
 
 	// Session flags
 	chatCmd.Flags().StringVarP(&sessionID, "session", "s", "", "Session ID (short or full UUID, or 'latest' for most recent session)")
