@@ -202,8 +202,6 @@ Example:
 					model.Description)
 			}
 
-			// Usage hint
-			fmt.Printf("\nUse a model with: llmc chat --model <model> [message]\n")
 		}
 
 		// Display errors at the end
