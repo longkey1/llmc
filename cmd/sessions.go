@@ -245,7 +245,7 @@ Examples:
 		var beforeDate time.Time
 
 		if deleteAll {
-			// Delete all sessions
+			// Delete all sessions without any protection
 			sessionsToDelete = sessions
 		} else {
 			// Parse or use default date
@@ -262,7 +262,13 @@ Examples:
 				if err != nil {
 					return fmt.Errorf("loading config: %w", err)
 				}
-				// Default: configured retention days (default 30)
+				// If retention days is 0, auto-deletion is disabled
+				if cfg.SessionRetentionDays == 0 {
+					fmt.Println("Auto-deletion is disabled (session_retention_days = 0).")
+					fmt.Println("Use --before or --all to delete sessions explicitly.")
+					return nil
+				}
+				// Default: configured retention days
 				beforeDate = time.Now().AddDate(0, 0, -cfg.SessionRetentionDays)
 			}
 
@@ -277,52 +283,52 @@ Examples:
 				fmt.Printf("No sessions found created before %s.\n", beforeDate.Format("2006-01-02"))
 				return nil
 			}
-		}
 
-		// Protect parent sessions that are referenced by child sessions
-		// Build a map of session IDs to delete for quick lookup
-		toDeleteMap := make(map[string]bool)
-		for _, sess := range sessionsToDelete {
-			toDeleteMap[sess.ID] = true
-		}
+			// Protect parent sessions that are referenced by child sessions
+			// Build a map of session IDs to delete for quick lookup
+			toDeleteMap := make(map[string]bool)
+			for _, sess := range sessionsToDelete {
+				toDeleteMap[sess.ID] = true
+			}
 
-		// Find parent sessions that should be protected
-		protectedParents := make(map[string]session.Session)
-		for _, sess := range sessions {
-			// If this session is not being deleted but its parent is
-			if !toDeleteMap[sess.ID] && sess.ParentID != "" && toDeleteMap[sess.ParentID] {
-				// Find the parent session in sessionsToDelete
-				for _, parent := range sessionsToDelete {
-					if parent.ID == sess.ParentID {
-						protectedParents[parent.ID] = parent
-						break
+			// Find parent sessions that should be protected
+			protectedParents := make(map[string]session.Session)
+			for _, sess := range sessions {
+				// If this session is not being deleted but its parent is
+				if !toDeleteMap[sess.ID] && sess.ParentID != "" && toDeleteMap[sess.ParentID] {
+					// Find the parent session in sessionsToDelete
+					for _, parent := range sessionsToDelete {
+						if parent.ID == sess.ParentID {
+							protectedParents[parent.ID] = parent
+							break
+						}
 					}
 				}
 			}
-		}
 
-		// Remove protected parents from deletion list
-		if len(protectedParents) > 0 {
-			var filteredSessions []session.Session
-			for _, sess := range sessionsToDelete {
-				if _, isProtected := protectedParents[sess.ID]; !isProtected {
-					filteredSessions = append(filteredSessions, sess)
+			// Remove protected parents from deletion list
+			if len(protectedParents) > 0 {
+				var filteredSessions []session.Session
+				for _, sess := range sessionsToDelete {
+					if _, isProtected := protectedParents[sess.ID]; !isProtected {
+						filteredSessions = append(filteredSessions, sess)
+					}
 				}
-			}
-			sessionsToDelete = filteredSessions
+				sessionsToDelete = filteredSessions
 
-			// Display notice about protected sessions
-			fmt.Fprintf(os.Stderr, "\nNotice: The following sessions were not deleted (referenced by child sessions):\n")
-			for _, parent := range protectedParents {
-				fmt.Fprintf(os.Stderr, "  - %s (created: %s)\n", parent.GetShortID(), parent.CreatedAt.Format("2006-01-02"))
+				// Display notice about protected sessions
+				fmt.Fprintf(os.Stderr, "\nNotice: The following sessions were not deleted (referenced by child sessions):\n")
+				for _, parent := range protectedParents {
+					fmt.Fprintf(os.Stderr, "  - %s (created: %s)\n", parent.GetShortID(), parent.CreatedAt.Format("2006-01-02"))
+				}
+				fmt.Fprintln(os.Stderr)
 			}
-			fmt.Fprintln(os.Stderr)
-		}
 
-		// Check if there are any sessions left to delete
-		if len(sessionsToDelete) == 0 {
-			fmt.Println("No sessions to delete after excluding protected parent sessions.")
-			return nil
+			// Check if there are any sessions left to delete
+			if len(sessionsToDelete) == 0 {
+				fmt.Println("No sessions to delete after excluding protected parent sessions.")
+				return nil
+			}
 		}
 
 		// Confirm deletion
@@ -669,27 +675,43 @@ func runInteractiveMode(sess *session.Session, llmProvider llmc.Provider) error 
 	defer rl.Close()
 
 	for {
-		// Read input
-		line, err := rl.Readline()
-		if err != nil {
-			if err == readline.ErrInterrupt {
-				// Ctrl+C pressed
-				if len(line) == 0 {
-					// Empty line, exit
-					fmt.Fprintln(os.Stderr, "\nGoodbye!")
+		// Read input (with backslash continuation support)
+		var inputLines []string
+		rl.SetPrompt("You> ")
+		for {
+			line, err := rl.Readline()
+			if err != nil {
+				if err == readline.ErrInterrupt {
+					if len(line) == 0 && len(inputLines) == 0 {
+						fmt.Fprintln(os.Stderr, "\nGoodbye!")
+						return nil
+					}
+					// Cancel current input
+					inputLines = nil
+					rl.SetPrompt("You> ")
 					break
+				} else if err == io.EOF {
+					fmt.Fprintln(os.Stderr, "\nGoodbye!")
+					return nil
 				}
-				// Line with content, clear it
-				continue
-			} else if err == io.EOF {
-				// Ctrl+D pressed
-				fmt.Fprintln(os.Stderr, "\nGoodbye!")
-				break
+				return fmt.Errorf("input error: %w", err)
 			}
-			return fmt.Errorf("input error: %w", err)
+
+			if strings.HasSuffix(line, `\`) {
+				// Backslash continuation: strip trailing backslash and continue
+				inputLines = append(inputLines, strings.TrimSuffix(line, `\`))
+				rl.SetPrompt("...> ")
+				continue
+			}
+			inputLines = append(inputLines, line)
+			break
 		}
 
-		input := strings.TrimSpace(line)
+		if len(inputLines) == 0 {
+			continue
+		}
+
+		input := strings.TrimSpace(strings.Join(inputLines, "\n"))
 
 		// Skip empty input
 		if input == "" {

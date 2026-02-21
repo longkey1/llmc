@@ -275,7 +275,7 @@ llmc sessions clear
 # Delete sessions created before a specific date
 llmc sessions clear --before 2024-01-01
 
-# Delete all sessions
+# Delete all sessions (including protected parent sessions)
 llmc sessions clear --all
 ```
 
@@ -338,7 +338,7 @@ llmc sessions clear --before 2024-01-01
 llmc sessions clear --before 2024-12      # Accepts YYYY-MM format
 llmc sessions clear --before 2024         # Accepts YYYY format
 
-# Delete all sessions (ignores retention setting)
+# Delete all sessions including protected parent sessions
 llmc sessions clear --all
 ```
 
@@ -347,6 +347,7 @@ llmc sessions clear --all
 Set a custom retention period in your config file:
 ```toml
 session_retention_days = 30  # Number of days to retain sessions (default: 30)
+                              # Set to 0 to disable auto-deletion
 ```
 
 Or using environment variable:
@@ -354,9 +355,24 @@ Or using environment variable:
 export LLMC_SESSION_RETENTION_DAYS=90
 ```
 
+**Disabling Auto-Deletion:**
+
+Set `session_retention_days = 0` to disable automatic session cleanup. Running `llmc sessions clear` without flags will show a notice and exit without deleting anything:
+```bash
+llmc sessions clear
+# Auto-deletion is disabled (session_retention_days = 0).
+# Use --before or --all to delete sessions explicitly.
+```
+
+You can still delete sessions explicitly using `--before` or `--all`:
+```bash
+llmc sessions clear --before 2024-01-01
+llmc sessions clear --all
+```
+
 **Parent Session Protection:**
 
-Sessions with child sessions (from summarization) are automatically protected:
+When using date-based deletion, sessions with child sessions (from summarization) are automatically protected:
 ```bash
 llmc sessions clear
 # Notice: The following sessions were not deleted (referenced by child sessions):
@@ -364,6 +380,8 @@ llmc sessions clear
 #
 # Are you sure you want to delete 8 sessions older than 30 days? [y/N]:
 ```
+
+Note: `--all` bypasses this protection and deletes every session unconditionally.
 
 #### Session Best Practices
 
@@ -573,7 +591,7 @@ enable_web_search = false  # Enable web search by default
 
 # Session management
 session_message_threshold = 50  # Warn when session exceeds message count (0 to disable)
-session_retention_days = 30     # Number of days to retain sessions (default: 30)
+session_retention_days = 30     # Number of days to retain sessions (default: 30, 0 to disable)
 ```
 
 #### Viewing Configuration
