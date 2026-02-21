@@ -266,17 +266,17 @@ llmc sessions show 550e8400
 # Rename a session
 llmc sessions rename 550e8400 "new-name"
 
-# Delete a session
+# Delete a specific session
 llmc sessions delete 550e8400
 
-# Delete old sessions (default: older than 30 days)
-llmc sessions clear
+# Delete old sessions (default: older than retention period)
+llmc sessions delete
 
 # Delete sessions created before a specific date
-llmc sessions clear --before 2024-01-01
+llmc sessions delete --before 2024-01-01
 
 # Delete all sessions (including protected parent sessions)
-llmc sessions clear --all
+llmc sessions delete --all
 ```
 
 #### Session Summarization
@@ -320,12 +320,12 @@ llmc chat -s 550e8400 --ignore-threshold "Continue anyway"
 
 #### Session Retention
 
-LLMC can automatically clean up old sessions to keep your session directory manageable. The `sessions clear` command respects parent-child relationships and will not delete parent sessions that are still referenced by child sessions.
+LLMC can automatically clean up old sessions to keep your session directory manageable. The `sessions delete` command (without an ID) respects parent-child relationships and will not delete parent sessions that are still referenced by child sessions.
 
 **Default Behavior:**
 ```bash
 # Delete sessions older than 30 days (default retention period)
-llmc sessions clear
+llmc sessions delete
 
 # The command will show what will be deleted:
 # "Are you sure you want to delete 15 sessions older than 30 days (created before 2024-12-29)? [y/N]:"
@@ -334,12 +334,12 @@ llmc sessions clear
 **Custom Date Range:**
 ```bash
 # Delete sessions created before a specific date
-llmc sessions clear --before 2024-01-01
-llmc sessions clear --before 2024-12      # Accepts YYYY-MM format
-llmc sessions clear --before 2024         # Accepts YYYY format
+llmc sessions delete --before 2024-01-01
+llmc sessions delete --before 2024-12      # Accepts YYYY-MM format
+llmc sessions delete --before 2024         # Accepts YYYY format
 
 # Delete all sessions including protected parent sessions
-llmc sessions clear --all
+llmc sessions delete --all
 ```
 
 **Configure Retention Period:**
@@ -357,24 +357,24 @@ export LLMC_SESSION_RETENTION_DAYS=90
 
 **Disabling Auto-Deletion:**
 
-Set `session_retention_days = 0` to disable automatic session cleanup. Running `llmc sessions clear` without flags will show a notice and exit without deleting anything:
+Set `session_retention_days = 0` to disable automatic session cleanup. Running `llmc sessions delete` without arguments or flags will show a notice and exit without deleting anything:
 ```bash
-llmc sessions clear
+llmc sessions delete
 # Auto-deletion is disabled (session_retention_days = 0).
 # Use --before or --all to delete sessions explicitly.
 ```
 
 You can still delete sessions explicitly using `--before` or `--all`:
 ```bash
-llmc sessions clear --before 2024-01-01
-llmc sessions clear --all
+llmc sessions delete --before 2024-01-01
+llmc sessions delete --all
 ```
 
 **Parent Session Protection:**
 
 When using date-based deletion, sessions with child sessions (from summarization) are automatically protected:
 ```bash
-llmc sessions clear
+llmc sessions delete
 # Notice: The following sessions were not deleted (referenced by child sessions):
 #   - abcd1234 (created: 2023-12-15)
 #
@@ -390,7 +390,7 @@ Note: `--all` bypasses this protection and deletes every session unconditionally
 3. **Organize by topic**: Create separate sessions for different conversations
 4. **Use interactive mode**: For back-and-forth discussions
 5. **Leverage prompt templates**: Create sessions with pre-configured system prompts
-6. **Clean up regularly**: Use `llmc sessions clear` to remove old sessions periodically
+6. **Clean up regularly**: Use `llmc sessions delete` to remove old sessions periodically
 
 ### Listing Available Models
 

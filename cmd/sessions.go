@@ -155,94 +155,59 @@ The ID can be a short ID (minimum 4 characters), full UUID, or "latest" for the 
 
 // sessionsDeleteCmd represents the sessions delete command
 var sessionsDeleteCmd = &cobra.Command{
-	Use:   "delete <id>",
-	Short: "Delete a session",
-	Long: `Delete a conversation session permanently.
+	Use:   "delete [id]",
+	Short: "Delete session(s)",
+	Long: `Delete one or more conversation sessions permanently.
+
+If an ID is provided, deletes that specific session.
+If no ID is provided, deletes old sessions based on --before or --all flags.
 
 The ID can be a short ID (minimum 4 characters), full UUID, or "latest" for the most recent session.
-
-Warning: This action cannot be undone.`,
-	Args: cobra.ExactArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		sessionID := args[0]
-
-		// Find session by prefix
-		sess, err := session.FindSessionByPrefix(sessionID)
-		if err != nil {
-			return fmt.Errorf("finding session: %w", err)
-		}
-
-		// Confirm deletion
-		fmt.Printf("Are you sure you want to delete session %s? [y/N]: ", sess.GetShortID())
-		var response string
-		fmt.Scanln(&response)
-
-		if response != "y" && response != "Y" {
-			fmt.Println("Deletion cancelled.")
-			return nil
-		}
-
-		// Delete the session
-		if err := session.DeleteSession(sess.ID); err != nil {
-			return fmt.Errorf("deleting session: %w", err)
-		}
-
-		fmt.Printf("Session %s deleted successfully.\n", sess.GetShortID())
-		return nil
-	},
-}
-
-// sessionsRenameCmd represents the sessions rename command
-var sessionsRenameCmd = &cobra.Command{
-	Use:   "rename <id> <name>",
-	Short: "Rename a session",
-	Long: `Rename a conversation session.
-
-The ID can be a short ID (minimum 4 characters), full UUID, or "latest" for the most recent session.`,
-	Args: cobra.ExactArgs(2),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		sessionID := args[0]
-		newName := args[1]
-
-		// Find session by prefix
-		sess, err := session.FindSessionByPrefix(sessionID)
-		if err != nil {
-			return fmt.Errorf("finding session: %w", err)
-		}
-
-		// Update session name
-		sess.Name = newName
-
-		// Save session
-		if err := session.SaveSession(sess); err != nil {
-			return fmt.Errorf("saving session: %w", err)
-		}
-
-		fmt.Printf("Session %s renamed to \"%s\".\n", sess.GetShortID(), newName)
-		return nil
-	},
-}
-
-// sessionsClearCmd represents the sessions clear command
-var sessionsClearCmd = &cobra.Command{
-	Use:   "clear",
-	Short: "Delete old sessions",
-	Long: `Delete old conversation sessions permanently.
-
-By default, deletes sessions created more than 30 days ago.
-Use --before to specify a different date, or --all to delete all sessions.
 
 Warning: This action cannot be undone.
 
 Examples:
-  llmc sessions clear                      # Delete sessions older than 30 days (default)
-  llmc sessions clear --before 2024-01-01  # Delete sessions created before 2024-01-01
-  llmc sessions clear --before 2024-12     # Delete sessions created before 2024-12-01
-  llmc sessions clear --all                # Delete all sessions`,
+  llmc sessions delete 550e8400                # Delete a specific session
+  llmc sessions delete latest                  # Delete the most recent session
+  llmc sessions delete                         # Delete sessions older than retention days (default)
+  llmc sessions delete --before 2024-01-01     # Delete sessions created before 2024-01-01
+  llmc sessions delete --before 2024-12        # Delete sessions created before 2024-12-01
+  llmc sessions delete --all                   # Delete all sessions`,
+	Args: cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		beforeDateStr, _ := cmd.Flags().GetString("before")
 		deleteAll, _ := cmd.Flags().GetBool("all")
 
+		// Single session deletion mode
+		if len(args) == 1 {
+			sessionID := args[0]
+
+			// Find session by prefix
+			sess, err := session.FindSessionByPrefix(sessionID)
+			if err != nil {
+				return fmt.Errorf("finding session: %w", err)
+			}
+
+			// Confirm deletion
+			fmt.Printf("Are you sure you want to delete session %s? [y/N]: ", sess.GetShortID())
+			var response string
+			fmt.Scanln(&response)
+
+			if response != "y" && response != "Y" {
+				fmt.Println("Deletion cancelled.")
+				return nil
+			}
+
+			// Delete the session
+			if err := session.DeleteSession(sess.ID); err != nil {
+				return fmt.Errorf("deleting session: %w", err)
+			}
+
+			fmt.Printf("Session %s deleted successfully.\n", sess.GetShortID())
+			return nil
+		}
+
+		// Bulk deletion mode
 		sessions, err := session.ListSessions()
 		if err != nil {
 			return fmt.Errorf("listing sessions: %w", err)
@@ -384,6 +349,37 @@ Examples:
 			fmt.Printf(" (%d failed)", failed)
 		}
 		fmt.Println(".")
+		return nil
+	},
+}
+
+// sessionsRenameCmd represents the sessions rename command
+var sessionsRenameCmd = &cobra.Command{
+	Use:   "rename <id> <name>",
+	Short: "Rename a session",
+	Long: `Rename a conversation session.
+
+The ID can be a short ID (minimum 4 characters), full UUID, or "latest" for the most recent session.`,
+	Args: cobra.ExactArgs(2),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		sessionID := args[0]
+		newName := args[1]
+
+		// Find session by prefix
+		sess, err := session.FindSessionByPrefix(sessionID)
+		if err != nil {
+			return fmt.Errorf("finding session: %w", err)
+		}
+
+		// Update session name
+		sess.Name = newName
+
+		// Save session
+		if err := session.SaveSession(sess); err != nil {
+			return fmt.Errorf("saving session: %w", err)
+		}
+
+		fmt.Printf("Session %s renamed to \"%s\".\n", sess.GetShortID(), newName)
 		return nil
 	},
 }
@@ -860,11 +856,10 @@ func init() {
 	sessionsCmd.AddCommand(sessionsShowCmd)
 	sessionsCmd.AddCommand(sessionsDeleteCmd)
 	sessionsCmd.AddCommand(sessionsRenameCmd)
-	sessionsCmd.AddCommand(sessionsClearCmd)
 	sessionsCmd.AddCommand(sessionsSummarizeCmd)
 	sessionsCmd.AddCommand(sessionsStartCmd)
 
-	// sessionsClearCmd flags
-	sessionsClearCmd.Flags().String("before", "", "Delete only sessions created before this date (format: YYYY-MM-DD, YYYY-MM, or YYYY)")
-	sessionsClearCmd.Flags().Bool("all", false, "Delete all sessions (overrides retention days setting)")
+	// sessionsDeleteCmd flags (for bulk deletion mode)
+	sessionsDeleteCmd.Flags().String("before", "", "Delete only sessions created before this date (format: YYYY-MM-DD, YYYY-MM, or YYYY)")
+	sessionsDeleteCmd.Flags().Bool("all", false, "Delete all sessions (overrides retention days setting)")
 }
