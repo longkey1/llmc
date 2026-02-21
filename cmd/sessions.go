@@ -44,8 +44,8 @@ var sessionsListCmd = &cobra.Command{
 
 		// Print table header
 		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-		fmt.Fprintln(w, "ID\tMODEL\tCREATED\tMESSAGES\tNAME")
-		fmt.Fprintln(w, "--\t-----\t-------\t--------\t----")
+		fmt.Fprintln(w, "ID\tMODEL\tCREATED\tMESSAGES\tNAME\tFIRST MESSAGE")
+		fmt.Fprintln(w, "--\t-----\t-------\t--------\t----\t-------------")
 
 		// Print each session
 		for _, sess := range sessions {
@@ -53,12 +53,25 @@ var sessionsListCmd = &cobra.Command{
 			if name == "" {
 				name = "-"
 			}
-			fmt.Fprintf(w, "%s\t%s\t%s\t%d\t%s\n",
+			firstMsg := "-"
+			for _, msg := range sess.Messages {
+				if msg.Role == "user" {
+					content := strings.ReplaceAll(msg.Content, "\n", " ")
+					if len(content) > 50 {
+						firstMsg = content[:50] + "..."
+					} else {
+						firstMsg = content
+					}
+					break
+				}
+			}
+			fmt.Fprintf(w, "%s\t%s\t%s\t%d\t%s\t%s\n",
 				sess.GetShortID(),
 				sess.Model,
 				sess.CreatedAt.Format("2006-01-02"),
 				sess.MessageCount(),
 				name,
+				firstMsg,
 			)
 		}
 		w.Flush()
