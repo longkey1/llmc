@@ -165,34 +165,46 @@ Example:
 			// Display provider name
 			fmt.Printf("Available models for %s:\n\n", result.provider)
 
-			// Build display rows, inserting a synthetic "@latest" row at the
-			// head of each family that has a dated/versioned variant.
-			rows := buildModelRows(result.provider, result.models)
-
 			// Calculate column widths
 			maxModelWidth := 15
 			maxModelIDWidth := 15
-			for _, row := range rows {
-				if len(row.model) > maxModelWidth {
-					maxModelWidth = len(row.model)
+			maxDescWidth := 50
+			for _, model := range result.models {
+				modelName := llmc.FormatModelString(result.provider, model.ID)
+				if len(modelName) > maxModelWidth {
+					maxModelWidth = len(modelName)
 				}
-				if len(row.modelID) > maxModelIDWidth {
-					maxModelIDWidth = len(row.modelID)
+				if len(model.ID) > maxModelIDWidth {
+					maxModelIDWidth = len(model.ID)
+				}
+				if len(model.Description) > maxDescWidth {
+					maxDescWidth = len(model.Description)
 				}
 			}
 
 			// Display header
-			fmt.Printf("%-*s  %-*s  %-10s  %s\n", maxModelWidth, "MODEL", maxModelIDWidth, "MODEL ID", "DEFAULT", "DESCRIPTION")
+			fmt.Printf("%-*s  %-*s  %-*s  %s\n", maxModelWidth, "MODEL", maxModelIDWidth, "MODEL ID", maxDescWidth, "DESCRIPTION", "DEFAULT")
+			fmt.Printf("%s  %s  %s  %s\n",
+				strings.Repeat("-", maxModelWidth),
+				strings.Repeat("-", maxModelIDWidth),
+				strings.Repeat("-", maxDescWidth),
+				strings.Repeat("-", 10))
 
-			// Display rows
-			for _, row := range rows {
-				fmt.Printf("%-*s  %-*s  %-10s  %s\n",
+			// Display models
+			for _, model := range result.models {
+				defaultMark := ""
+				if model.IsDefault {
+					defaultMark = "Yes"
+				}
+				modelName := llmc.FormatModelString(result.provider, model.ID)
+				fmt.Printf("%-*s  %-*s  %-*s  %s\n",
 					maxModelWidth,
-					row.model,
+					modelName,
 					maxModelIDWidth,
-					row.modelID,
-					row.defaultMark,
-					row.description)
+					model.ID,
+					maxDescWidth,
+					model.Description,
+					defaultMark)
 			}
 
 		}
@@ -214,108 +226,6 @@ Example:
 
 		return nil
 	},
-}
-
-// modelRow is a single line in the `llmc models` output.
-type modelRow struct {
-	model       string // MODEL column ("provider:id" or "provider:base@latest")
-	modelID     string // MODEL ID column (concrete model ID)
-	defaultMark string // DEFAULT column
-	description string // DESCRIPTION column
-}
-
-// buildModelRows expands the model list into display rows, inserting a synthetic
-// "provider:base@latest" row at the head of each family that has at least one
-// dated/versioned variant. The resolved target of each @latest row is computed
-// with llmc.ResolveLatestModel so the listing matches actual resolution.
-func buildModelRows(provider string, models []llmc.ModelInfo) []modelRow {
-	// Find family bases that have a variant distinct from the base itself.
-	familyHasVariant := make(map[string]bool)
-	for _, m := range models {
-		if base := deriveModelBase(m.ID); m.ID != base {
-			familyHasVariant[base] = true
-		}
-	}
-
-	// Resolve an @latest row for each qualifying base.
-	latestRows := make(map[string]modelRow)
-	for base := range familyHasVariant {
-		resolved, err := llmc.ResolveLatestModel(models, base)
-		if err != nil {
-			continue
-		}
-		latestRows[base] = modelRow{
-			model:       llmc.FormatModelString(provider, base+llmc.LatestSuffix),
-			modelID:     resolved,
-			description: "-> latest of " + base,
-		}
-	}
-
-	emitted := make(map[string]bool)
-	rows := make([]modelRow, 0, len(models)+len(latestRows))
-	for _, m := range models {
-		base := deriveModelBase(m.ID)
-		if row, ok := latestRows[base]; ok && !emitted[base] {
-			rows = append(rows, row)
-			emitted[base] = true
-		}
-
-		defaultMark := ""
-		if m.IsDefault {
-			defaultMark = "Yes"
-		}
-		rows = append(rows, modelRow{
-			model:       llmc.FormatModelString(provider, m.ID),
-			modelID:     m.ID,
-			defaultMark: defaultMark,
-			description: m.Description,
-		})
-	}
-
-	return rows
-}
-
-// deriveModelBase strips a trailing date/version suffix from a model ID to obtain
-// its family base. It only removes recognizable date-shaped or numeric-version
-// tails, never the version digits embedded in a model name (e.g. "gpt-4").
-//
-//	gpt-4o-2024-11-20        -> gpt-4o      (-YYYY-MM-DD)
-//	claude-opus-4-5-20251101 -> claude-opus-4-5 (-YYYYMMDD)
-//	gpt-4-0613               -> gpt-4       (-MMDD / numeric tail)
-//	gpt-4o                   -> gpt-4o      (no suffix)
-func deriveModelBase(id string) string {
-	parts := strings.Split(id, "-")
-
-	// Trailing -YYYY-MM-DD (4-2-2 digit groups).
-	if len(parts) >= 4 &&
-		isDigits(parts[len(parts)-1], 2) &&
-		isDigits(parts[len(parts)-2], 2) &&
-		isDigits(parts[len(parts)-3], 4) {
-		return strings.Join(parts[:len(parts)-3], "-")
-	}
-
-	// Trailing numeric-only tail of 2+ digits (e.g. -20251101, -0613, -002).
-	if len(parts) >= 2 {
-		last := parts[len(parts)-1]
-		if len(last) >= 2 && isDigits(last, len(last)) {
-			return strings.Join(parts[:len(parts)-1], "-")
-		}
-	}
-
-	return id
-}
-
-// isDigits reports whether s has exactly n characters, all of them ASCII digits.
-func isDigits(s string, n int) bool {
-	if len(s) != n {
-		return false
-	}
-	for i := 0; i < len(s); i++ {
-		if s[i] < '0' || s[i] > '9' {
-			return false
-		}
-	}
-	return true
 }
 
 func init() {

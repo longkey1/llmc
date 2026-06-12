@@ -14,10 +14,10 @@ import (
 )
 
 const (
-	ProviderName       = "anthropic"
-	DefaultBaseURL     = "https://api.anthropic.com/v1"
-	DefaultModel       = "claude-3-5-sonnet-20241022"
-	AnthropicVersion   = "2023-06-01"
+	ProviderName     = "anthropic"
+	DefaultBaseURL   = "https://api.anthropic.com/v1"
+	DefaultModel     = "claude-3-5-sonnet-20241022"
+	AnthropicVersion = "2023-06-01"
 )
 
 // ModelsAPIResponse represents the response from Anthropic's models endpoint
@@ -35,10 +35,10 @@ type ModelData struct {
 
 // MessagesAPIRequest represents the request body for Anthropic's Messages API
 type MessagesAPIRequest struct {
-	Model     string          `json:"model"`
-	MaxTokens int             `json:"max_tokens"`
-	System    string          `json:"system,omitempty"` // System prompt (optional)
-	Messages  []MessageInput  `json:"messages"`
+	Model     string         `json:"model"`
+	MaxTokens int            `json:"max_tokens"`
+	System    string         `json:"system,omitempty"` // System prompt (optional)
+	Messages  []MessageInput `json:"messages"`
 }
 
 // MessageInput represents a message in the conversation

@@ -16,7 +16,7 @@ make vet            # go vet ./...
 make tidy           # go mod tidy
 
 # 単一テスト実行
-go test ./internal/llmc/ -run TestResolveLatestModel -v
+go test ./internal/llmc/ -run TestParseModelString -v
 
 # リリース (デフォルトdry-run、dryrun=false で実行)
 make release type=patch|minor|major dryrun=false
@@ -33,14 +33,12 @@ make re-release tag=<tag> dryrun=false   # 既存タグの再リリース
 
 新プロバイダー追加時に触る箇所:
 1. `internal/<provider>/` に `Provider` 実装を作成(`ProviderName`, `NewProvider` を公開)
-2. `cmd/provider.go` の `newProviderByName` の switch に case を追加
+2. `cmd/provider.go` の `newProvider` の switch に case を追加
 3. `internal/llmc/config/config.go` の `Config` 構造体にトークン/ベースURLフィールドを追加し、`GetToken`/`GetBaseURL`(`config.go`)と `LoadConfig` の環境変数展開、`NewDefaultConfig` のデフォルト値を更新
 
-### モデル指定と @latest 解決
+### モデル指定
 
 モデルは `provider:model` 形式(例 `openai:gpt-4o`, `anthropic:claude-3-5-sonnet-20241022`)。`llmc.ParseModelString` / `FormatModelString` で相互変換。
-
-`provider:base@latest` 形式は `cmd/provider.go` の `resolveModelAlias` が `ListModels()` を呼び、`llmc.ResolveLatestModel` で最新スナップショットに解決する。家族判定は「base完全一致」または「base-<数字>」(日付/バージョンサフィックス)。preview/experimental等のマーカーを含むモデルは、リクエストしたbase自身がマーカーを含む場合を除き除外される。
 
 ### 設定 (internal/llmc/config)
 
@@ -62,7 +60,7 @@ make re-release tag=<tag> dryrun=false   # 既存タグの再リリース
 
 ### コマンド層 (cmd/)
 
-Cobraベース。`root.go` が共通フラグと設定読み込み、`chat.go`/`sessions.go`(対話モード含む)/`models.go`/`prompts.go`/`config.go`/`init.go` が各サブコマンド。`provider.go` はプロバイダー生成と `@latest` 解決のユーティリティ(コマンドではない)。
+Cobraベース。`root.go` が共通フラグと設定読み込み、`chat.go`/`sessions.go`(対話モード含む)/`models.go`/`prompts.go`/`config.go`/`init.go` が各サブコマンド。`provider.go` はプロバイダー生成のユーティリティ(コマンドではない)。
 
 ## 主要な依存関係
 

@@ -73,8 +73,8 @@ type ResponsesAPIOutput struct {
 
 // ResponsesAPIContent represents content with text and annotations
 type ResponsesAPIContent struct {
-	Text        string                    `json:"text"`
-	Annotations []ResponsesAPIAnnotation  `json:"annotations,omitempty"`
+	Text        string                   `json:"text"`
+	Annotations []ResponsesAPIAnnotation `json:"annotations,omitempty"`
 }
 
 // ResponsesAPIAnnotation represents a citation annotation

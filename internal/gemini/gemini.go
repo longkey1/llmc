@@ -34,9 +34,9 @@ type ModelsAPIResponse struct {
 
 // GeminiModelData represents a single model in the API response
 type GeminiModelData struct {
-	Name                      string   `json:"name"`
-	DisplayName               string   `json:"displayName"`
-	Description               string   `json:"description"`
+	Name                       string   `json:"name"`
+	DisplayName                string   `json:"displayName"`
+	Description                string   `json:"description"`
 	SupportedGenerationMethods []string `json:"supportedGenerationMethods"`
 }
 
@@ -96,10 +96,10 @@ type GeminiResponsePart struct {
 
 // GeminiGroundingMetadata contains grounding information
 type GeminiGroundingMetadata struct {
-	SearchEntryPoint   *GeminiSearchEntryPoint `json:"searchEntryPoint,omitempty"`
-	WebSearchQueries   []string                `json:"webSearchQueries,omitempty"`
-	GroundingChunks    []GeminiGroundingChunk  `json:"groundingChunks,omitempty"`
-	GroundingSupports  []GeminiGroundingSupport `json:"groundingSupports,omitempty"`
+	SearchEntryPoint  *GeminiSearchEntryPoint  `json:"searchEntryPoint,omitempty"`
+	WebSearchQueries  []string                 `json:"webSearchQueries,omitempty"`
+	GroundingChunks   []GeminiGroundingChunk   `json:"groundingChunks,omitempty"`
+	GroundingSupports []GeminiGroundingSupport `json:"groundingSupports,omitempty"`
 }
 
 // GeminiSearchEntryPoint contains search entry point information
@@ -120,14 +120,14 @@ type GeminiWebChunk struct {
 
 // GeminiGroundingSupport represents grounding support information
 type GeminiGroundingSupport struct {
-	Segment        *GeminiSegment `json:"segment,omitempty"`
-	GroundingChunkIndices []int   `json:"groundingChunkIndices,omitempty"`
+	Segment               *GeminiSegment `json:"segment,omitempty"`
+	GroundingChunkIndices []int          `json:"groundingChunkIndices,omitempty"`
 }
 
 // GeminiSegment represents a text segment
 type GeminiSegment struct {
-	StartIndex int `json:"startIndex,omitempty"`
-	EndIndex   int `json:"endIndex,omitempty"`
+	StartIndex int    `json:"startIndex,omitempty"`
+	EndIndex   int    `json:"endIndex,omitempty"`
 	Text       string `json:"text,omitempty"`
 }
 

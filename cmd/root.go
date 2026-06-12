@@ -65,8 +65,8 @@ func initConfig() {
 	// Create default config with multiple prompts directories
 	// Note: Later directories in the array take precedence over earlier ones
 	defaultPromptDirs := []string{
-		"/usr/share/llmc/prompts",              // System package prompts (lowest priority)
-		"/usr/local/share/llmc/prompts",        // Local install prompts (low priority)
+		"/usr/share/llmc/prompts",               // System package prompts (lowest priority)
+		"/usr/local/share/llmc/prompts",         // Local install prompts (low priority)
 		filepath.Join(userConfigDir, "prompts"), // User-specific prompts (highest priority)
 	}
 	defaultConfig := config.NewDefaultConfig(filepath.Join(userConfigDir, "prompts"))
