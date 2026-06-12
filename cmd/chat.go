@@ -184,6 +184,11 @@ web_search = true  # Optional: enables web search for this prompt"`,
 				cfg.Model = envModel
 			}
 
+			// Resolve @latest alias before pinning the model into the session
+			if err := resolveModelAlias(cfg); err != nil {
+				return fmt.Errorf("resolving model: %w", err)
+			}
+
 			// Create new session
 			sess = session.NewSession(cfg.Model)
 			sess.Name = sessionName
@@ -221,6 +226,11 @@ web_search = true  # Optional: enables web search for this prompt"`,
 					return fmt.Errorf("invalid model from prompt file: %w", err)
 				}
 				cfg.Model = *promptModel
+			}
+
+			// Resolve @latest alias to a concrete model
+			if err := resolveModelAlias(cfg); err != nil {
+				return fmt.Errorf("resolving model: %w", err)
 			}
 
 			// Select provider

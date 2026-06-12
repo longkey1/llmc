@@ -84,3 +84,83 @@ func TestParseModelString(t *testing.T) {
 		})
 	}
 }
+
+func TestResolveLatestModel(t *testing.T) {
+	openaiModels := []ModelInfo{
+		{ID: "gpt-4o"},
+		{ID: "gpt-4o-2024-11-20"},
+		{ID: "gpt-4o-2024-08-06"},
+		{ID: "gpt-4o-mini"},
+		{ID: "gpt-4o-mini-2024-07-18"},
+		{ID: "gpt-4"},
+		{ID: "gpt-4-0613"},
+		{ID: "gpt-4-0125-preview"},
+		{ID: "gpt-4-1106-preview"},
+	}
+
+	tests := []struct {
+		name    string
+		models  []ModelInfo
+		base    string
+		want    string
+		wantErr bool
+	}{
+		{
+			name:   "picks latest dated snapshot, not the mini family",
+			models: openaiModels,
+			base:   "gpt-4o",
+			want:   "gpt-4o-2024-11-20",
+		},
+		{
+			name:   "mini family resolves to its own dated snapshot",
+			models: openaiModels,
+			base:   "gpt-4o-mini",
+			want:   "gpt-4o-mini-2024-07-18",
+		},
+		{
+			name:   "preview variants excluded by default",
+			models: openaiModels,
+			base:   "gpt-4",
+			want:   "gpt-4-0613",
+		},
+		{
+			name: "base containing a preview marker includes preview variants",
+			models: []ModelInfo{
+				{ID: "gpt-4-0125-preview"},
+				{ID: "gpt-4-1106-preview"},
+			},
+			base: "gpt-4-0125-preview",
+			want: "gpt-4-0125-preview",
+		},
+		{
+			name:   "exact-only match resolves to the base itself",
+			models: []ModelInfo{{ID: "gemini-2.0-flash"}, {ID: "gemini-1.5-pro"}},
+			base:   "gemini-2.0-flash",
+			want:   "gemini-2.0-flash",
+		},
+		{
+			name:    "no match returns an error",
+			models:  openaiModels,
+			base:    "o1",
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := ResolveLatestModel(tt.models, tt.base)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("expected error, got nil (resolved %q)", got)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got != tt.want {
+				t.Errorf("ResolveLatestModel(%q) = %q, want %q", tt.base, got, tt.want)
+			}
+		})
+	}
+}

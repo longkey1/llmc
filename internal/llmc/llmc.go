@@ -5,8 +5,18 @@ package llmc
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 )
+
+// LatestSuffix is the suffix appended to a model base name to request the
+// latest snapshot in that family, e.g. "openai:gpt-4o@latest".
+const LatestSuffix = "@latest"
+
+// previewMarkers are tokens that identify preview/experimental model variants.
+// Models containing any of these as a hyphen-delimited token are excluded from
+// "@latest" resolution by default (unless the requested base itself contains one).
+var previewMarkers = []string{"preview", "experimental", "exp", "beta", "alpha", "rc", "nightly"}
 
 // ModelInfo represents information about an available model from a provider.
 type ModelInfo struct {
@@ -67,6 +77,79 @@ func ParseModelString(modelStr string) (string, string, error) {
 	}
 
 	return provider, model, nil
+}
+
+// hasMarkerToken reports whether id contains marker as a hyphen-delimited token.
+// This avoids false matches such as "exp" inside an unrelated word.
+func hasMarkerToken(id, marker string) bool {
+	for _, token := range strings.Split(id, "-") {
+		if token == marker {
+			return true
+		}
+	}
+	return false
+}
+
+// isPreview reports whether id contains any preview/experimental marker token.
+func isPreview(id string) bool {
+	for _, marker := range previewMarkers {
+		if hasMarkerToken(id, marker) {
+			return true
+		}
+	}
+	return false
+}
+
+// ResolveLatestModel resolves a model family base to its latest snapshot ID
+// from the given list of models.
+//
+// A model is considered part of the base family when its ID either equals base
+// exactly, or starts with base+"-" followed by a digit (a date or version
+// suffix). Variants whose distinguishing token is a word (e.g. "gpt-4o-mini")
+// are therefore not pulled in by "gpt-4o@latest".
+//
+// preview/experimental variants are excluded by default, unless the requested
+// base itself contains a preview marker (i.e. the caller explicitly opted in).
+//
+// The candidate with the lexicographically greatest ID is returned, which for
+// date/version suffixes corresponds to the newest snapshot.
+func ResolveLatestModel(models []ModelInfo, base string) (string, error) {
+	includePreview := isPreview(base)
+
+	var candidates []string
+	for _, m := range models {
+		if !isLatestCandidate(m.ID, base) {
+			continue
+		}
+		if !includePreview && isPreview(m.ID) {
+			continue
+		}
+		candidates = append(candidates, m.ID)
+	}
+
+	if len(candidates) == 0 {
+		return "", fmt.Errorf("no models found matching '%s%s'", base, LatestSuffix)
+	}
+
+	sort.Slice(candidates, func(i, j int) bool {
+		return candidates[i] > candidates[j]
+	})
+
+	return candidates[0], nil
+}
+
+// isLatestCandidate reports whether id belongs to the base family: either an
+// exact match, or base+"-"+<digit...> (a date/version suffix).
+func isLatestCandidate(id, base string) bool {
+	if id == base {
+		return true
+	}
+	prefix := base + "-"
+	if !strings.HasPrefix(id, prefix) {
+		return false
+	}
+	rest := id[len(prefix):]
+	return len(rest) > 0 && rest[0] >= '0' && rest[0] <= '9'
 }
 
 // FormatModelString formats provider and model into "provider:model" format.

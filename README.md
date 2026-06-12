@@ -51,6 +51,9 @@ llmc chat -e
 llmc chat --model openai:gpt-4 "Hello"
 llmc chat -m gemini:gemini-2.0-flash "Hello"
 llmc chat -m anthropic:claude-3-5-sonnet-20241022 "Hello"
+
+# Use @latest to auto-select the newest snapshot of a model family
+llmc chat -m openai:gpt-4o@latest "Hello"
 ```
 
 ### Using Prompts
@@ -416,18 +419,47 @@ The output shows:
 - **DEFAULT**: Currently configured model (marked as "Yes")
 - **DESCRIPTION**: Creation date (OpenAI/Anthropic) or description (Gemini)
 
+For every model family that has dated/versioned snapshots, an `@latest` row is
+shown at the head of the family, pointing at the snapshot that `@latest` would
+resolve to (see [Selecting the Latest Model](#selecting-the-latest-model)).
+
 Example output:
 ```
 Available models for openai:
 
-MODEL              MODEL ID      DEFAULT    DESCRIPTION
------------------  ------------  ---------  ----------------------------------
-openai:gpt-5-mini  gpt-5-mini    Yes        Created: 2025-08-06 05:32:08 JST
-openai:gpt-4o      gpt-4o                   Created: 2024-05-13 12:00:00 JST
-openai:gpt-4o-mini gpt-4o-mini              Created: 2024-07-18 12:00:00 JST
-
-Use a model with: llmc chat --model <model> [message]
+MODEL                      MODEL ID                DEFAULT  DESCRIPTION
+openai:gpt-4o@latest       gpt-4o-2024-11-20                -> latest of gpt-4o
+openai:gpt-4o-2024-11-20   gpt-4o-2024-11-20                Created: 2024-11-20 09:00:00 JST
+openai:gpt-4o-2024-08-06   gpt-4o-2024-08-06                Created: 2024-08-06 12:00:00 JST
+openai:gpt-4o              gpt-4o                           Created: 2024-05-13 12:00:00 JST
+openai:gpt-4o-mini@latest  gpt-4o-mini-2024-07-18           -> latest of gpt-4o-mini
+openai:gpt-4o-mini-2024..  gpt-4o-mini-2024-07-18           Created: 2024-07-18 12:00:00 JST
+openai:gpt-4o-mini         gpt-4o-mini                      Created: 2024-07-18 12:00:00 JST
 ```
+
+### Selecting the Latest Model
+
+Append `@latest` to a model base name to automatically select the newest
+dated/versioned snapshot of that family, instead of pinning a specific date:
+
+```bash
+llmc chat -m openai:gpt-4o@latest "Hello"
+llmc chat -m anthropic:claude-opus-4-5@latest "Hello"
+```
+
+How `@latest` is resolved:
+- The base name is matched against the model list, picking the newest
+  dated/versioned snapshot (e.g. `openai:gpt-4o@latest` → `gpt-4o-2024-11-20`).
+- Unrelated variants are not pulled in: `gpt-4o@latest` never resolves to a
+  `gpt-4o-mini` model.
+- **preview / experimental variants are excluded by default** (e.g. models
+  containing `preview`, `exp`, `beta`). To target a preview family, include the
+  marker in the base, e.g. `openai:gpt-4-0125-preview@latest`.
+- Run `llmc models <provider>` to see exactly which model each `@latest` resolves
+  to before using it. Use `--verbose` on `chat` to print the resolved model.
+
+When you start a new session with an `@latest` model, the resolved model is
+pinned to that session so the conversation stays on a single model.
 
 ## Configuration
 
