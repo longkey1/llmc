@@ -96,11 +96,12 @@ Example:
 
 			// Temporarily set the token and model for provider initialization
 			cfg.Model = llmc.FormatModelString(targetProvider, "temp")
-			if targetProvider == openai.ProviderName {
+			switch targetProvider {
+			case openai.ProviderName:
 				cfg.OpenAIToken = token
-			} else if targetProvider == gemini.ProviderName {
+			case gemini.ProviderName:
 				cfg.GeminiToken = token
-			} else if targetProvider == anthropic.ProviderName {
+			case anthropic.ProviderName:
 				cfg.AnthropicToken = token
 			}
 
@@ -111,15 +112,16 @@ Example:
 			// Get models
 			var models []llmc.ModelInfo
 			var modelsErr error
-			if targetProvider == openai.ProviderName {
+			switch targetProvider {
+			case openai.ProviderName:
 				provider := openai.NewProvider(cfg)
 				provider.SetDebug(verbose)
 				models, modelsErr = provider.ListModels()
-			} else if targetProvider == gemini.ProviderName {
+			case gemini.ProviderName:
 				provider := gemini.NewProvider(cfg)
 				provider.SetDebug(verbose)
 				models, modelsErr = provider.ListModels()
-			} else if targetProvider == anthropic.ProviderName {
+			case anthropic.ProviderName:
 				provider := anthropic.NewProvider(cfg)
 				provider.SetDebug(verbose)
 				models, modelsErr = provider.ListModels()

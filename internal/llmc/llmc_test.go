@@ -84,3 +84,49 @@ func TestParseModelString(t *testing.T) {
 		})
 	}
 }
+
+func TestFormatModelString(t *testing.T) {
+	tests := []struct {
+		name     string
+		provider string
+		model    string
+		want     string
+	}{
+		{
+			name:     "openai model",
+			provider: "openai",
+			model:    "gpt-4",
+			want:     "openai:gpt-4",
+		},
+		{
+			name:     "model containing colon",
+			provider: "openai",
+			model:    "o1:2024-12-17",
+			want:     "openai:o1:2024-12-17",
+		},
+		{
+			name:     "empty values",
+			provider: "",
+			model:    "",
+			want:     ":",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := FormatModelString(tt.provider, tt.model); got != tt.want {
+				t.Errorf("FormatModelString() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestParseModelStringRoundTrip(t *testing.T) {
+	provider, model, err := ParseModelString(FormatModelString("gemini", "gemini-2.0-flash"))
+	if err != nil {
+		t.Fatalf("ParseModelString() unexpected error: %v", err)
+	}
+	if provider != "gemini" || model != "gemini-2.0-flash" {
+		t.Errorf("round trip = (%q, %q), want (%q, %q)", provider, model, "gemini", "gemini-2.0-flash")
+	}
+}

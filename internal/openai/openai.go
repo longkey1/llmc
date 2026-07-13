@@ -36,7 +36,7 @@ type ModelData struct {
 type ResponsesAPIRequest struct {
 	Model        string             `json:"model"`
 	Instructions string             `json:"instructions,omitempty"` // System-level instructions (optional)
-	Input        interface{}        `json:"input"`                  // string or []InputMessage
+	Input        any                `json:"input"`                  // string or []InputMessage
 	Tools        []ResponsesAPITool `json:"tools,omitempty"`
 }
 

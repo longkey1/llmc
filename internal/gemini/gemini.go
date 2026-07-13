@@ -19,14 +19,6 @@ const (
 	DefaultModel   = "gemini-2.0-flash"
 )
 
-// Supported models for Gemini (fallback list)
-var supportedModels = []llmc.ModelInfo{
-	{ID: "gemini-2.0-flash", Description: "Fast and efficient Gemini 2.0", IsDefault: true},
-	{ID: "gemini-2.0-pro", Description: "Advanced Gemini 2.0 for complex tasks", IsDefault: false},
-	{ID: "gemini-1.5-pro", Description: "Previous generation pro model", IsDefault: false},
-	{ID: "gemini-1.5-flash", Description: "Previous generation flash model", IsDefault: false},
-}
-
 // ModelsAPIResponse represents the response from Gemini's models endpoint
 type ModelsAPIResponse struct {
 	Models []GeminiModelData `json:"models"`
