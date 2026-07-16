@@ -6,7 +6,11 @@ export PRODUCT_NAME=$(shell cat .product_name 2>/dev/null || echo "unknown")
 .PHONY: build
 build: ## Build the binary to ./bin/
 	@mkdir -p bin
-	go build -o bin/$(PRODUCT_NAME)
+	go build -ldflags "\
+		-X github.com/longkey1/llmc/internal/version.Version=$$(git describe --tags --always --dirty 2>/dev/null || echo dev) \
+		-X github.com/longkey1/llmc/internal/version.CommitSHA=$$(git rev-parse --short HEAD 2>/dev/null || echo unknown) \
+		-X github.com/longkey1/llmc/internal/version.BuildTime=$$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+		-o bin/$(PRODUCT_NAME)
 
 .PHONY: test
 test: ## Run tests
@@ -115,12 +119,10 @@ re-release: ## Rerelease target with tag argument. Usage: make re-release tag=<t
 	fi; \
 	echo "Target tag: $$TAG"; \
 	if [ "$(dryrun)" = "false" ]; then \
-		echo "Deleting GitHub release..."; \
-		gh release delete "$$TAG" -y; \
+		echo "Deleting GitHub release and associated tag..."; \
+		gh release delete "$$TAG" --cleanup-tag -y || true; \
 		echo "Deleting local tag..."; \
-		git tag -d "$$TAG"; \
-		echo "Deleting remote tag..."; \
-		git push origin ":refs/tags/$$TAG" --no-verify --force; \
+		git tag -d "$$TAG" || true; \
 		echo "Recreating tag on HEAD..."; \
 		git tag -a "$$TAG" -m "Release $$TAG"; \
 		echo "Pushing tag to origin..."; \

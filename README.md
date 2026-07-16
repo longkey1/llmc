@@ -897,3 +897,7 @@ LLMC uses provider-specific APIs:
 **Anthropic**: Uses Messages API with support for Claude 3 and Claude 4 models (Opus, Sonnet, Haiku). The `llmc models anthropic` command fetches the latest available models from Anthropic's API.
 
 The models list is dynamically retrieved from each provider's API, so you'll always see the most current available models without needing to update the tool.
+
+## License
+
+MIT
