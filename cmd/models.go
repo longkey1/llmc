@@ -6,6 +6,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 
 	"github.com/longkey1/llmc/internal/anthropic"
@@ -167,9 +168,16 @@ Example:
 			// Display provider name
 			fmt.Printf("Available models for %s:\n\n", result.provider)
 
+			// Map resolved model IDs to the aliases that point at them
+			aliasesByModel, unmatchedAliases := resolveAliasesByModel(cfg, result.provider, result.models)
+			for _, alias := range unmatchedAliases {
+				fmt.Fprintf(os.Stderr, "Warning: alias %s matches no model on %s\n", alias, result.provider)
+			}
+
 			// Calculate column widths
 			maxModelWidth := 15
 			maxModelIDWidth := 15
+			maxAliasWidth := 5
 			maxDescWidth := 50
 			for _, model := range result.models {
 				modelName := llmc.FormatModelString(result.provider, model.ID)
@@ -179,17 +187,21 @@ Example:
 				if len(model.ID) > maxModelIDWidth {
 					maxModelIDWidth = len(model.ID)
 				}
+				if aliases := aliasesByModel[model.ID]; len(aliases) > maxAliasWidth {
+					maxAliasWidth = len(aliases)
+				}
 				if len(model.Description) > maxDescWidth {
 					maxDescWidth = len(model.Description)
 				}
 			}
 
 			// Display header
-			fmt.Printf("%-*s  %-*s  %-*s  %s\n", maxModelWidth, "MODEL", maxModelIDWidth, "MODEL ID", maxDescWidth, "DESCRIPTION", "DEFAULT")
-			fmt.Printf("%s  %s  %s  %s\n",
+			fmt.Printf("%-*s  %-*s  %-*s  %-*s  %s\n", maxModelWidth, "MODEL", maxModelIDWidth, "MODEL ID", maxDescWidth, "DESCRIPTION", maxAliasWidth, "ALIAS", "DEFAULT")
+			fmt.Printf("%s  %s  %s  %s  %s\n",
 				strings.Repeat("-", maxModelWidth),
 				strings.Repeat("-", maxModelIDWidth),
 				strings.Repeat("-", maxDescWidth),
+				strings.Repeat("-", maxAliasWidth),
 				strings.Repeat("-", 10))
 
 			// Display models
@@ -199,13 +211,15 @@ Example:
 					defaultMark = "Yes"
 				}
 				modelName := llmc.FormatModelString(result.provider, model.ID)
-				fmt.Printf("%-*s  %-*s  %-*s  %s\n",
+				fmt.Printf("%-*s  %-*s  %-*s  %-*s  %s\n",
 					maxModelWidth,
 					modelName,
 					maxModelIDWidth,
 					model.ID,
 					maxDescWidth,
 					model.Description,
+					maxAliasWidth,
+					aliasesByModel[model.ID],
 					defaultMark)
 			}
 
@@ -228,6 +242,44 @@ Example:
 
 		return nil
 	},
+}
+
+// resolveAliasesByModel resolves every config-defined alias targeting the
+// given provider against the already-fetched model list (no extra API call).
+// It returns a map of model ID to a comma-separated list of the aliases that
+// resolve to it, plus the aliases whose pattern matched no model.
+func resolveAliasesByModel(cfg *config.Config, provider string, models []llmc.ModelInfo) (map[string]string, []string) {
+	names := make([]string, 0, len(cfg.ModelAliases))
+	for name := range cfg.ModelAliases {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+
+	aliasesByModel := make(map[string]string)
+	var unmatched []string
+	for _, name := range names {
+		aliasProvider, pattern, err := llmc.ParseModelString(cfg.ModelAliases[name])
+		if err != nil || aliasProvider != provider {
+			continue
+		}
+
+		resolved := pattern
+		if llmc.HasModelPattern(pattern) {
+			resolution, err := llmc.ResolveModelPattern(models, pattern)
+			if err != nil {
+				unmatched = append(unmatched, llmc.AliasPrefix+name)
+				continue
+			}
+			resolved = resolution.Resolved
+		}
+
+		if existing, ok := aliasesByModel[resolved]; ok {
+			aliasesByModel[resolved] = existing + ", " + llmc.AliasPrefix + name
+		} else {
+			aliasesByModel[resolved] = llmc.AliasPrefix + name
+		}
+	}
+	return aliasesByModel, unmatched
 }
 
 // modelsResolveCmd resolves a model alias or wildcard pattern to a concrete model

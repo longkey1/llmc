@@ -470,16 +470,18 @@ llmc models anthropic
 The output shows:
 - **MODEL**: Full identifier in `provider:model` format
 - **MODEL ID**: Model ID without provider prefix
-- **DEFAULT**: Currently configured model (marked as "Yes")
 - **DESCRIPTION**: Creation date (OpenAI/Anthropic) or description (Gemini)
+- **ALIAS**: Config-defined aliases that currently resolve to this model
+  (e.g., `@sonnet`); aliases that match no model are reported as warnings
+- **DEFAULT**: Currently configured model (marked as "Yes")
 
 Example output:
 ```
 Available models for openai:
 
-MODEL              MODEL ID      DESCRIPTION                          DEFAULT
------------------  ------------  -----------------------------------  ----------
-openai:gpt-5-mini  gpt-5-mini    Created: 2025-08-06 05:32:08 JST      Yes
+MODEL              MODEL ID      DESCRIPTION                          ALIAS   DEFAULT
+-----------------  ------------  -----------------------------------  ------  ----------
+openai:gpt-5-mini  gpt-5-mini    Created: 2025-08-06 05:32:08 JST     @mini   Yes
 openai:gpt-4o      gpt-4o        Created: 2024-05-13 12:00:00 JST
 openai:gpt-4o-mini gpt-4o-mini   Created: 2024-07-18 12:00:00 JST
 
