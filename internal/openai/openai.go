@@ -154,7 +154,7 @@ func (p *Provider) ListModels() ([]llmc.ModelInfo, error) {
 		}
 		return nil, fmt.Errorf("failed to connect to API. Use --verbose for details")
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	// Read response body
 	body, err := io.ReadAll(resp.Body)
@@ -260,7 +260,7 @@ func (p *Provider) Chat(message string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("error sending request: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	// Read response body
 	body, err := io.ReadAll(resp.Body)
@@ -415,7 +415,7 @@ func (p *Provider) ChatWithHistory(systemPrompt string, messages []llmc.Message,
 	if err != nil {
 		return "", fmt.Errorf("error sending request: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	// Read response body
 	body, err := io.ReadAll(resp.Body)

@@ -85,14 +85,14 @@ func initConfig() {
 	viper.SetDefault("session_retention_days", defaultConfig.SessionRetentionDays)
 
 	// Bind environment variables
-	viper.BindEnv("openai_base_url", "LLMC_OPENAI_BASE_URL")
-	viper.BindEnv("openai_token", "LLMC_OPENAI_TOKEN")
-	viper.BindEnv("gemini_base_url", "LLMC_GEMINI_BASE_URL")
-	viper.BindEnv("gemini_token", "LLMC_GEMINI_TOKEN")
-	viper.BindEnv("anthropic_base_url", "LLMC_ANTHROPIC_BASE_URL")
-	viper.BindEnv("anthropic_token", "LLMC_ANTHROPIC_TOKEN")
-	viper.BindEnv("session_message_threshold", "LLMC_SESSION_MESSAGE_THRESHOLD")
-	viper.BindEnv("session_retention_days", "LLMC_SESSION_RETENTION_DAYS")
+	_ = viper.BindEnv("openai_base_url", "LLMC_OPENAI_BASE_URL")
+	_ = viper.BindEnv("openai_token", "LLMC_OPENAI_TOKEN")
+	_ = viper.BindEnv("gemini_base_url", "LLMC_GEMINI_BASE_URL")
+	_ = viper.BindEnv("gemini_token", "LLMC_GEMINI_TOKEN")
+	_ = viper.BindEnv("anthropic_base_url", "LLMC_ANTHROPIC_BASE_URL")
+	_ = viper.BindEnv("anthropic_token", "LLMC_ANTHROPIC_TOKEN")
+	_ = viper.BindEnv("session_message_threshold", "LLMC_SESSION_MESSAGE_THRESHOLD")
+	_ = viper.BindEnv("session_retention_days", "LLMC_SESSION_RETENTION_DAYS")
 
 	if cfgFile != "" {
 		// Use config file from the flag.

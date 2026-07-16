@@ -44,8 +44,8 @@ var sessionsListCmd = &cobra.Command{
 
 		// Print table header
 		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-		fmt.Fprintln(w, "ID\tMODEL\tCREATED\tMESSAGES\tNAME\tFIRST MESSAGE")
-		fmt.Fprintln(w, "--\t-----\t-------\t--------\t----\t-------------")
+		_, _ = fmt.Fprintln(w, "ID\tMODEL\tCREATED\tMESSAGES\tNAME\tFIRST MESSAGE")
+		_, _ = fmt.Fprintln(w, "--\t-----\t-------\t--------\t----\t-------------")
 
 		// Print each session
 		for _, sess := range sessions {
@@ -65,7 +65,7 @@ var sessionsListCmd = &cobra.Command{
 					break
 				}
 			}
-			fmt.Fprintf(w, "%s\t%s\t%s\t%d\t%s\t%s\n",
+			_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%d\t%s\t%s\n",
 				sess.GetShortID(),
 				sess.Model,
 				sess.CreatedAt.Format("2006-01-02"),
@@ -74,7 +74,7 @@ var sessionsListCmd = &cobra.Command{
 				firstMsg,
 			)
 		}
-		w.Flush()
+		_ = w.Flush()
 
 		fmt.Println("\nUse 'llmc sessions show <id>' to view session details.")
 		return nil
@@ -191,7 +191,7 @@ Examples:
 			// Confirm deletion
 			fmt.Printf("Are you sure you want to delete session %s? [y/N]: ", sess.GetShortID())
 			var response string
-			fmt.Scanln(&response)
+			_, _ = fmt.Scanln(&response)
 
 			if response != "y" && response != "Y" {
 				fmt.Println("Deletion cancelled.")
@@ -325,7 +325,7 @@ Examples:
 				len(sessionsToDelete), cfg.SessionRetentionDays, beforeDate.Format("2006-01-02"))
 		}
 		var response string
-		fmt.Scanln(&response)
+		_, _ = fmt.Scanln(&response)
 
 		if response != "y" && response != "Y" {
 			fmt.Println("Deletion cancelled.")
@@ -474,7 +474,7 @@ The ID can be a short ID (minimum 4 characters), full UUID, or "latest" for the 
 				if msg.Role == "assistant" {
 					role = "Assistant"
 				}
-				conversationText.WriteString(fmt.Sprintf("[Message %d] %s: %s\n\n", messageNum, role, msg.Content))
+				fmt.Fprintf(&conversationText, "[Message %d] %s: %s\n\n", messageNum, role, msg.Content)
 				messageNum++
 			}
 		}
@@ -490,7 +490,7 @@ The ID can be a short ID (minimum 4 characters), full UUID, or "latest" for the 
 			if msg.Role == "assistant" {
 				role = "Assistant"
 			}
-			conversationText.WriteString(fmt.Sprintf("[Message %d] %s: %s\n\n", messageNum, role, msg.Content))
+			fmt.Fprintf(&conversationText, "[Message %d] %s: %s\n\n", messageNum, role, msg.Content)
 			messageNum++
 		}
 
@@ -686,7 +686,7 @@ func runInteractiveMode(sess *session.Session, llmProvider llmc.Provider) error 
 	if err != nil {
 		return fmt.Errorf("creating readline instance: %w", err)
 	}
-	defer rl.Close()
+	defer func() { _ = rl.Close() }()
 
 	for {
 		// Read input (with backslash continuation support)

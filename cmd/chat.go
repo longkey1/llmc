@@ -110,7 +110,7 @@ web_search = true  # Optional: enables web search for this prompt"`,
 				// Ask for confirmation
 				fmt.Fprint(os.Stderr, "Continue with this session? [y/N]: ")
 				var response string
-				fmt.Scanln(&response)
+				_, _ = fmt.Scanln(&response)
 
 				if response != "y" && response != "Y" {
 					fmt.Fprintln(os.Stderr, "Cancelled.")
@@ -325,7 +325,7 @@ func getMessageFromEditor() (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to create temporary file: %v", err)
 	}
-	defer os.Remove(tmpFile.Name())
+	defer func() { _ = os.Remove(tmpFile.Name()) }()
 
 	// Open the editor
 	cmd := exec.Command(editor, tmpFile.Name())

@@ -49,7 +49,7 @@ You can specify a different location using the --config option.`,
 		if err != nil {
 			return fmt.Errorf("failed to create config file: %v", err)
 		}
-		defer f.Close()
+		defer func() { _ = f.Close() }()
 
 		// Encode config to TOML
 		encoder := toml.NewEncoder(f)

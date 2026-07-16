@@ -102,14 +102,14 @@ func LoadSession(id string) (*Session, error) {
 	data, err := os.ReadFile(sessionFile)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, fmt.Errorf("session not found: %s\n\nRun 'llmc sessions list' to see available sessions.", id)
+			return nil, fmt.Errorf("session not found: %s\n\nRun 'llmc sessions list' to see available sessions", id)
 		}
 		return nil, fmt.Errorf("failed to read session file: %w", err)
 	}
 
 	var session Session
 	if err := json.Unmarshal(data, &session); err != nil {
-		return nil, fmt.Errorf("failed to parse session file: %w\n\nThe session file may be corrupted.", err)
+		return nil, fmt.Errorf("failed to parse session file: %w\n\nThe session file may be corrupted", err)
 	}
 
 	return &session, nil
@@ -208,7 +208,7 @@ func FindSessionByPrefix(prefix string) (*Session, error) {
 	}
 
 	if len(matches) == 0 {
-		return nil, fmt.Errorf("session not found: %s\n\nRun 'llmc sessions list' to see available sessions.", prefix)
+		return nil, fmt.Errorf("session not found: %s\n\nRun 'llmc sessions list' to see available sessions", prefix)
 	}
 
 	if len(matches) > 1 {
