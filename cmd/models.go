@@ -230,6 +230,78 @@ Example:
 	},
 }
 
+// modelsResolveCmd resolves a model alias or wildcard pattern to a concrete model
+var modelsResolveCmd = &cobra.Command{
+	Use:   "resolve <@alias|provider:model-pattern>",
+	Short: "Resolve a model alias or wildcard pattern to a concrete model",
+	Long: `Resolve a config-defined model alias ("@alias") or a wildcard model
+pattern ("provider:model-pattern") to the newest matching concrete model,
+using the provider's model list.
+
+The resolved "provider:model" is printed to stdout, so the output can be
+used directly in scripts.
+
+Example:
+  llmc models resolve @sonnet
+  llmc models resolve "openai:anthropic/claude-sonnet-*"
+  llmc chat -m "$(llmc models resolve @sonnet)" "Hello"`,
+	Args: cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		cfg, err := config.LoadConfig()
+		if err != nil {
+			return fmt.Errorf("loading config: %w", err)
+		}
+
+		input := args[0]
+		if llmc.IsModelAlias(input) {
+			expanded, err := expandModelAlias(cfg, input)
+			if err != nil {
+				return err
+			}
+			if verbose {
+				fmt.Fprintf(os.Stderr, "Alias %s -> %s\n", input, expanded)
+			}
+			input = expanded
+		}
+
+		provider, pattern, err := llmc.ParseModelString(input)
+		if err != nil {
+			return fmt.Errorf("invalid model format: %w", err)
+		}
+
+		if !llmc.HasModelPattern(pattern) {
+			fmt.Println(llmc.FormatModelString(provider, pattern))
+			return nil
+		}
+
+		cfg.Model = input
+		p, err := newProviderByName(cfg, provider)
+		if err != nil {
+			return err
+		}
+		p.SetDebug(verbose)
+
+		models, err := p.ListModels()
+		if err != nil {
+			return fmt.Errorf("listing models for %s: %w", provider, err)
+		}
+
+		resolution, err := llmc.ResolveModelPattern(models, pattern)
+		if err != nil {
+			return fmt.Errorf("resolving %q: %w (check available models with: llmc models %s)", input, err, provider)
+		}
+
+		if verbose {
+			for _, c := range resolution.Candidates {
+				fmt.Fprintf(os.Stderr, "candidate: %s\n", c.ID)
+			}
+		}
+		fmt.Println(llmc.FormatModelString(provider, resolution.Resolved))
+		return nil
+	},
+}
+
 func init() {
 	rootCmd.AddCommand(modelsCmd)
+	modelsCmd.AddCommand(modelsResolveCmd)
 }

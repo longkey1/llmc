@@ -625,6 +625,11 @@ Examples:
 				fmt.Fprintf(os.Stderr, "Model: %s\n", sess.Model)
 			}
 		} else {
+			// Resolve model alias before pinning the model to the session
+			if err := resolveModelAlias(cfg); err != nil {
+				return err
+			}
+
 			// Create new session
 			sess = session.NewSession(cfg.Model)
 

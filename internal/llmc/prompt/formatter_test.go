@@ -90,6 +90,11 @@ system = "sys"
 user = "usr"
 model = "not-a-model"
 `)
+	writePrompt(t, dir, "alias-model.toml", `
+system = "sys"
+user = "usr {{input}}"
+model = "@sonnet"
+`)
 
 	tests := []struct {
 		name          string
@@ -145,6 +150,14 @@ model = "not-a-model"
 			promptName: "bad-model",
 			promptDirs: []string{dir},
 			wantErr:    true,
+		},
+		{
+			name:       "alias model passes through unvalidated",
+			message:    "msg",
+			promptName: "alias-model",
+			promptDirs: []string{dir},
+			want:       "System: sys\n\nUser: usr msg",
+			wantModel:  "@sonnet",
 		},
 		{
 			name:       "invalid argument format",

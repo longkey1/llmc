@@ -9,17 +9,18 @@ import (
 
 // Config holds the configuration for the LLM provider
 type Config struct {
-	Model                   string   `toml:"model" mapstructure:"model"` // Format: "provider:model" (e.g., "openai:gpt-4")
-	OpenAIBaseURL           string   `toml:"openai_base_url" mapstructure:"openai_base_url"`
-	OpenAIToken             string   `toml:"openai_token" mapstructure:"openai_token"`
-	GeminiBaseURL           string   `toml:"gemini_base_url" mapstructure:"gemini_base_url"`
-	GeminiToken             string   `toml:"gemini_token" mapstructure:"gemini_token"`
-	AnthropicBaseURL        string   `toml:"anthropic_base_url" mapstructure:"anthropic_base_url"`
-	AnthropicToken          string   `toml:"anthropic_token" mapstructure:"anthropic_token"`
-	PromptDirs              []string `toml:"prompt_dirs" mapstructure:"prompt_dirs"`
-	EnableWebSearch         bool     `toml:"enable_web_search" mapstructure:"enable_web_search"`
-	SessionMessageThreshold int      `toml:"session_message_threshold" mapstructure:"session_message_threshold"` // 0 = disabled
-	SessionRetentionDays    int      `toml:"session_retention_days" mapstructure:"session_retention_days"`       // Number of days to retain sessions (default: 30)
+	Model                   string            `toml:"model" mapstructure:"model"`                 // Format: "provider:model" (e.g., "openai:gpt-4")
+	ModelAliases            map[string]string `toml:"model_aliases" mapstructure:"model_aliases"` // Alias name -> "provider:model-family" (used via "@alias")
+	OpenAIBaseURL           string            `toml:"openai_base_url" mapstructure:"openai_base_url"`
+	OpenAIToken             string            `toml:"openai_token" mapstructure:"openai_token"`
+	GeminiBaseURL           string            `toml:"gemini_base_url" mapstructure:"gemini_base_url"`
+	GeminiToken             string            `toml:"gemini_token" mapstructure:"gemini_token"`
+	AnthropicBaseURL        string            `toml:"anthropic_base_url" mapstructure:"anthropic_base_url"`
+	AnthropicToken          string            `toml:"anthropic_token" mapstructure:"anthropic_token"`
+	PromptDirs              []string          `toml:"prompt_dirs" mapstructure:"prompt_dirs"`
+	EnableWebSearch         bool              `toml:"enable_web_search" mapstructure:"enable_web_search"`
+	SessionMessageThreshold int               `toml:"session_message_threshold" mapstructure:"session_message_threshold"` // 0 = disabled
+	SessionRetentionDays    int               `toml:"session_retention_days" mapstructure:"session_retention_days"`       // Number of days to retain sessions (default: 30)
 }
 
 // GetModel returns the model name

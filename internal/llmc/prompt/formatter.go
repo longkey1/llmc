@@ -67,8 +67,10 @@ func FormatMessage(message string, promptName string, promptDirs []string, args 
 		userPrompt = strings.ReplaceAll(userPrompt, placeholder, value)
 	}
 
-	// Validate model format if specified in prompt
-	if promptTemplate.Model != nil {
+	// Validate model format if specified in prompt.
+	// "@alias" references are passed through; they are expanded and
+	// validated by the caller against the config-defined alias map.
+	if promptTemplate.Model != nil && !llmc.IsModelAlias(*promptTemplate.Model) {
 		if _, _, err := llmc.ParseModelString(*promptTemplate.Model); err != nil {
 			return "", nil, nil, fmt.Errorf("invalid model format in prompt template: %w", err)
 		}

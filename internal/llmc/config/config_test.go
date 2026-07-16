@@ -316,6 +316,10 @@ openai_token = "$LLMC_TEST_OPENAI_TOKEN"
 openai_base_url = "${LLMC_TEST_BASE_URL}"
 gemini_token = "plain-gemini-token"
 prompt_dirs = ["prompts", "/abs/prompts"]
+
+[model_aliases]
+sonnet = "openai:anthropic/claude-sonnet"
+terra = "openai:openai/gpt-terra"
 `)
 
 	cfg, err := LoadConfig()
@@ -343,6 +347,19 @@ prompt_dirs = ["prompts", "/abs/prompts"]
 	for i, want := range wantDirs {
 		if cfg.PromptDirs[i] != want {
 			t.Errorf("PromptDirs[%d] = %v, want %v", i, cfg.PromptDirs[i], want)
+		}
+	}
+
+	wantAliases := map[string]string{
+		"sonnet": "openai:anthropic/claude-sonnet",
+		"terra":  "openai:openai/gpt-terra",
+	}
+	if len(cfg.ModelAliases) != len(wantAliases) {
+		t.Fatalf("ModelAliases = %v, want %v", cfg.ModelAliases, wantAliases)
+	}
+	for name, want := range wantAliases {
+		if cfg.ModelAliases[name] != want {
+			t.Errorf("ModelAliases[%q] = %v, want %v", name, cfg.ModelAliases[name], want)
 		}
 	}
 }

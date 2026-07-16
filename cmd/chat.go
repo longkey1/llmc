@@ -10,7 +10,6 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/longkey1/llmc/internal/llmc"
 	"github.com/longkey1/llmc/internal/llmc/config"
 	promptpkg "github.com/longkey1/llmc/internal/llmc/prompt"
 	"github.com/longkey1/llmc/internal/llmc/session"
@@ -155,7 +154,7 @@ web_search = true  # Optional: enables web search for this prompt"`,
 
 				// Apply model from prompt template
 				if promptModel != nil {
-					if _, _, err := llmc.ParseModelString(*promptModel); err != nil {
+					if err := validateModelOrAlias(*promptModel); err != nil {
 						return fmt.Errorf("invalid model from prompt file: %w", err)
 					}
 					cfg.Model = *promptModel
@@ -173,15 +172,20 @@ web_search = true  # Optional: enables web search for this prompt"`,
 			// Apply model with priority: flag > env > prompt template > config file
 			envModel := os.Getenv("LLMC_MODEL")
 			if cmd.Flags().Changed("model") {
-				if _, _, err := llmc.ParseModelString(model); err != nil {
+				if err := validateModelOrAlias(model); err != nil {
 					return fmt.Errorf("invalid model from flag: %w", err)
 				}
 				cfg.Model = model
 			} else if envModel != "" {
-				if _, _, err := llmc.ParseModelString(envModel); err != nil {
+				if err := validateModelOrAlias(envModel); err != nil {
 					return fmt.Errorf("invalid model from environment: %w", err)
 				}
 				cfg.Model = envModel
+			}
+
+			// Resolve model alias before pinning the model to the session
+			if err := resolveModelAlias(cfg); err != nil {
+				return err
 			}
 
 			// Create new session
@@ -207,20 +211,25 @@ web_search = true  # Optional: enables web search for this prompt"`,
 			// Apply model priority
 			envModel := os.Getenv("LLMC_MODEL")
 			if cmd.Flags().Changed("model") {
-				if _, _, err := llmc.ParseModelString(model); err != nil {
+				if err := validateModelOrAlias(model); err != nil {
 					return fmt.Errorf("invalid model from flag: %w", err)
 				}
 				cfg.Model = model
 			} else if envModel != "" {
-				if _, _, err := llmc.ParseModelString(envModel); err != nil {
+				if err := validateModelOrAlias(envModel); err != nil {
 					return fmt.Errorf("invalid model from environment: %w", err)
 				}
 				cfg.Model = envModel
 			} else if promptModel != nil {
-				if _, _, err := llmc.ParseModelString(*promptModel); err != nil {
+				if err := validateModelOrAlias(*promptModel); err != nil {
 					return fmt.Errorf("invalid model from prompt file: %w", err)
 				}
 				cfg.Model = *promptModel
+			}
+
+			// Resolve model alias to a concrete model
+			if err := resolveModelAlias(cfg); err != nil {
+				return err
 			}
 
 			// Select provider

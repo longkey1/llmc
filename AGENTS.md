@@ -40,6 +40,8 @@ make re-release tag=<tag> dryrun=false   # 既存タグの再リリース
 
 モデルは `provider:model` 形式(例 `openai:gpt-4o`, `anthropic:claude-3-5-sonnet-20241022`)。`llmc.ParseModelString` / `FormatModelString` で相互変換。
 
+`@name` 形式はモデルエイリアス参照。config の `[model_aliases]` マップ(`name = "provider:model-pattern"`)を引き、値にワイルドカード `*` が含まれる場合は `ListModels` の結果から最新の一致モデルに動的解決される(`internal/llmc/resolve.go` の `ResolveModelPattern`。数値バージョンベクトル比較、日付トークンはスナップショット扱い)。`*` なしの値はAPI呼び出しなしでそのまま使用。解決オーケストレーターは `cmd/provider.go` の `resolveModelAlias` で、チャットの単発実行時と新規セッション作成直前(セッションには解決済みの具体名が固定保存される)に呼ばれる。未定義の `@name` はエラー。`llmc models resolve <@alias|provider:pattern>` で解決結果を確認できる。
+
 ### 設定 (internal/llmc/config)
 
 `Config` 構造体は viper で TOML からアンマーシャルされる。トークン/ベースURLは `$VAR` および `${VAR}` 形式の環境変数参照を `LoadConfig` 内で展開する(未設定時は空文字)。相対パス(prompt_dirs等)は `ResolvePath` で設定ファイルのディレクトリ基準に絶対パス化される。
@@ -60,7 +62,7 @@ make re-release tag=<tag> dryrun=false   # 既存タグの再リリース
 
 ### コマンド層 (cmd/)
 
-Cobraベース。`root.go` が共通フラグと設定読み込み、`chat.go`/`sessions.go`(対話モード含む)/`models.go`/`prompts.go`/`config.go`/`init.go` が各サブコマンド。`provider.go` はプロバイダー生成のユーティリティ(コマンドではない)。
+Cobraベース。`root.go` が共通フラグと設定読み込み、`chat.go`/`sessions.go`(対話モード含む)/`models.go`(`resolve` サブコマンド含む)/`prompts.go`/`config.go`/`init.go` が各サブコマンド。`provider.go` はプロバイダー生成とモデルエイリアス解決のユーティリティ(コマンドではない)。
 
 ## 主要な依存関係
 

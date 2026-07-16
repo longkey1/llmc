@@ -51,6 +51,9 @@ llmc chat -e
 llmc chat --model openai:gpt-4 "Hello"
 llmc chat -m gemini:gemini-2.0-flash "Hello"
 llmc chat -m anthropic:claude-3-5-sonnet-20241022 "Hello"
+
+# Use a config-defined model alias (see "Model Aliases")
+llmc chat -m @sonnet "Hello"
 ```
 
 ### Using Prompts
@@ -392,6 +395,60 @@ Note: `--all` bypasses this protection and deletes every session unconditionally
 5. **Leverage prompt templates**: Create sessions with pre-configured system prompts
 6. **Clean up regularly**: Use `llmc sessions delete` to remove old sessions periodically
 
+### Model Aliases
+
+Define short aliases for models in your config file and use them anywhere a
+model can be specified, prefixed with `@`:
+
+```toml
+# $HOME/.config/llmc/config.toml
+[model_aliases]
+sonnet = "openai:anthropic/claude-sonnet-*"   # wildcard: resolves to the newest match
+gpt    = "openai:openai/gpt-5*"
+pinned = "openai:anthropic/claude-sonnet-4-6" # no wildcard: used as-is (no API call)
+```
+
+```bash
+llmc chat -m @sonnet "Hello"
+# -> resolves to e.g. openai:anthropic/claude-sonnet-5
+```
+
+**Wildcard resolution:**
+- `*` in the alias value matches any characters in the model ID. The matching
+  models are fetched from the provider's model list API, and the newest one is
+  selected.
+- "Newest" is determined by comparing numeric version components in the ID
+  (`claude-sonnet-5` > `claude-sonnet-4-6` > `claude-sonnet-4-5`,
+  `gpt-5.6` > `gpt-5.2`). Snapshot dates (`-20250929`, `@20250929`,
+  `-2025-08-07`) are compared only between IDs with equal versions, and
+  undated IDs are preferred over dated ones.
+- Values without `*` are used as-is, with no API call — useful for pinning.
+- This works with OpenAI-compatible proxies such as LiteLLM, including
+  route-prefixed model IDs (e.g., `anthropic/claude-sonnet-5`,
+  `vertex_ai/gemini-2.5-flash`).
+
+**Behavior:**
+- Aliases are accepted from the `-m/--model` flag, the `LLMC_MODEL`
+  environment variable, prompt templates (`model = "@sonnet"`), and the
+  `model` setting in the config file.
+- New sessions store the resolved concrete model, so continuing a session
+  never changes its model.
+- Using `@name` that is not defined in `[model_aliases]` is an error.
+
+**Checking what an alias resolves to:**
+
+```bash
+# Prints the resolved provider:model to stdout
+llmc models resolve @sonnet
+# -> openai:anthropic/claude-sonnet-5
+
+# Wildcard patterns can be tested directly
+llmc models resolve "openai:anthropic/claude-opus-*"
+
+# Usable in scripts
+llmc chat -m "$(llmc models resolve @sonnet)" "Hello"
+```
+
 ### Listing Available Models
 
 View all available models by fetching real-time data from provider APIs:
@@ -592,6 +649,11 @@ enable_web_search = false  # Enable web search by default
 # Session management
 session_message_threshold = 50  # Warn when session exceeds message count (0 to disable)
 session_retention_days = 30     # Number of days to retain sessions (default: 30, 0 to disable)
+
+# Model aliases (optional) - use as "@name", e.g. llmc chat -m @sonnet
+[model_aliases]
+sonnet = "openai:anthropic/claude-sonnet-*"  # "*" resolves to the newest matching model
+pinned = "openai:anthropic/claude-sonnet-4-6"
 ```
 
 #### Viewing Configuration
