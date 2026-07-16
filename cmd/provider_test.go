@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"strings"
 	"testing"
 
@@ -100,7 +101,7 @@ func TestResolveModelAliasNoOp(t *testing.T) {
 		ModelAliases: map[string]string{"sonnet": "openai:anthropic/claude-sonnet-*"},
 	}
 
-	if err := resolveModelAlias(cfg); err != nil {
+	if err := resolveModelAlias(context.Background(), cfg); err != nil {
 		t.Fatalf("resolveModelAlias() unexpected error: %v", err)
 	}
 	if cfg.Model != "openai:gpt-4" {
@@ -114,7 +115,7 @@ func TestResolveModelAliasUndefined(t *testing.T) {
 		ModelAliases: map[string]string{"sonnet": "openai:anthropic/claude-sonnet-*"},
 	}
 
-	err := resolveModelAlias(cfg)
+	err := resolveModelAlias(context.Background(), cfg)
 	if err == nil {
 		t.Fatal("resolveModelAlias() expected error for undefined alias, got nil")
 	}
@@ -129,7 +130,7 @@ func TestResolveModelAliasInvalidValue(t *testing.T) {
 		ModelAliases: map[string]string{"broken": "no-colon"},
 	}
 
-	if err := resolveModelAlias(cfg); err == nil {
+	if err := resolveModelAlias(context.Background(), cfg); err == nil {
 		t.Fatal("resolveModelAlias() expected error for invalid alias value, got nil")
 	}
 }
@@ -142,7 +143,7 @@ func TestResolveModelAliasPinnedValueSkipsAPI(t *testing.T) {
 		ModelAliases: map[string]string{"sonnet": "openai:anthropic/claude-sonnet-4-6"},
 	}
 
-	if err := resolveModelAlias(cfg); err != nil {
+	if err := resolveModelAlias(context.Background(), cfg); err != nil {
 		t.Fatalf("resolveModelAlias() unexpected error: %v", err)
 	}
 	if cfg.Model != "openai:anthropic/claude-sonnet-4-6" {
@@ -158,7 +159,7 @@ func TestResolveModelAliasWildcardListModelsFailure(t *testing.T) {
 		ModelAliases: map[string]string{"sonnet": "openai:anthropic/claude-sonnet-*"},
 	}
 
-	if err := resolveModelAlias(cfg); err == nil {
+	if err := resolveModelAlias(context.Background(), cfg); err == nil {
 		t.Fatal("resolveModelAlias() expected error when ListModels fails for wildcard alias, got nil")
 	}
 }

@@ -71,8 +71,9 @@ func SaveSession(session *Session) error {
 		return err
 	}
 
-	// Create session directory if it doesn't exist
-	if err := os.MkdirAll(sessionDir, 0755); err != nil {
+	// Create session directory if it doesn't exist.
+	// Sessions hold conversation content, so keep them private (0700/0600).
+	if err := os.MkdirAll(sessionDir, 0700); err != nil {
 		return fmt.Errorf("failed to create session directory: %w", err)
 	}
 
@@ -82,9 +83,28 @@ func SaveSession(session *Session) error {
 		return fmt.Errorf("failed to serialize session: %w", err)
 	}
 
-	// Write to file (full UUID as filename)
+	// Write via a temp file + rename so a crash mid-write cannot corrupt an
+	// existing session file (full UUID as filename)
 	sessionFile := filepath.Join(sessionDir, session.ID+".json")
-	if err := os.WriteFile(sessionFile, data, 0644); err != nil {
+	tmp, err := os.CreateTemp(sessionDir, session.ID+".tmp-")
+	if err != nil {
+		return fmt.Errorf("failed to create session file: %w", err)
+	}
+	tmpName := tmp.Name()
+	defer func() { _ = os.Remove(tmpName) }()
+
+	if err := tmp.Chmod(0600); err != nil {
+		_ = tmp.Close()
+		return fmt.Errorf("failed to write session file: %w", err)
+	}
+	if _, err := tmp.Write(data); err != nil {
+		_ = tmp.Close()
+		return fmt.Errorf("failed to write session file: %w", err)
+	}
+	if err := tmp.Close(); err != nil {
+		return fmt.Errorf("failed to write session file: %w", err)
+	}
+	if err := os.Rename(tmpName, sessionFile); err != nil {
 		return fmt.Errorf("failed to write session file: %w", err)
 	}
 
@@ -141,7 +161,7 @@ func ListSessions() ([]Session, error) {
 	}
 
 	// Create directory if it doesn't exist
-	if err := os.MkdirAll(sessionDir, 0755); err != nil {
+	if err := os.MkdirAll(sessionDir, 0700); err != nil {
 		return nil, fmt.Errorf("failed to create session directory: %w", err)
 	}
 
@@ -194,17 +214,36 @@ func FindSessionByPrefix(prefix string) (*Session, error) {
 		return LoadSession(prefix)
 	}
 
-	// Search for prefix matches
-	sessions, err := ListSessions()
+	// Match the prefix against filenames so only matching sessions are
+	// actually read from disk
+	sessionDir, err := GetSessionDir()
 	if err != nil {
 		return nil, err
 	}
+	entries, err := os.ReadDir(sessionDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, fmt.Errorf("session not found: %s\n\nRun 'llmc sessions list' to see available sessions", prefix)
+		}
+		return nil, fmt.Errorf("failed to read session directory: %w", err)
+	}
 
 	var matches []Session
-	for _, session := range sessions {
-		if strings.HasPrefix(session.ID, prefix) {
-			matches = append(matches, session)
+	for _, entry := range entries {
+		name := entry.Name()
+		if entry.IsDir() || !strings.HasSuffix(name, ".json") {
+			continue
 		}
+		id := strings.TrimSuffix(name, ".json")
+		if !strings.HasPrefix(id, prefix) {
+			continue
+		}
+		session, err := LoadSession(id)
+		if err != nil {
+			// Skip corrupted session files
+			continue
+		}
+		matches = append(matches, *session)
 	}
 
 	if len(matches) == 0 {

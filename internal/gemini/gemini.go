@@ -1,12 +1,11 @@
 package gemini
 
 import (
-	"bytes"
-	"encoding/json"
+	"context"
 	"fmt"
-	"io"
 	"net/http"
 	"os"
+	"slices"
 	"sort"
 	"strings"
 
@@ -161,72 +160,39 @@ func (p *Provider) SetDebug(enabled bool) {
 	p.debug = enabled
 }
 
-// ListModels returns the list of supported models from the API
-func (p *Provider) ListModels() ([]llmc.ModelInfo, error) {
-	// Get token for Gemini
+// endpoint resolves the token and base URL and returns the full URL for path.
+// Gemini authenticates via the key query parameter instead of a header.
+func (p *Provider) endpoint(path string) (string, error) {
 	token, err := p.config.GetToken(ProviderName)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get token: %w", err)
+		return "", fmt.Errorf("failed to get token: %w", err)
 	}
-
-	// Get base URL for Gemini
 	baseURL, err := p.config.GetBaseURL(ProviderName)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get base URL: %w", err)
+		return "", fmt.Errorf("failed to get base URL: %w", err)
 	}
+	if baseURL == "" {
+		baseURL = DefaultBaseURL
+	}
+	return baseURL + path + "?key=" + token, nil
+}
 
-	// Build URL with API key
-	url := baseURL + "/models?key=" + token
-
-	// Create HTTP request
-	req, err := http.NewRequest("GET", url, nil)
+// ListModels returns the list of supported models from the API
+func (p *Provider) ListModels(ctx context.Context) ([]llmc.ModelInfo, error) {
+	url, err := p.endpoint("/models")
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %v", err)
+		return nil, err
 	}
 
-	// Send request
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		if p.debug {
-			return nil, fmt.Errorf("failed to connect to API: %v", err)
-		}
-		return nil, fmt.Errorf("failed to connect to API. Use --verbose for details")
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	// Read response body
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response: %v", err)
-	}
-
-	// Check for error response
-	if resp.StatusCode != http.StatusOK {
-		if p.debug {
-			return nil, fmt.Errorf("API request failed (HTTP %d): %s", resp.StatusCode, string(body))
-		}
-		return nil, fmt.Errorf("API request failed (HTTP %d). Use --verbose for details", resp.StatusCode)
-	}
-
-	// Parse response
 	var result ModelsAPIResponse
-	if err := json.Unmarshal(body, &result); err != nil {
-		if p.debug {
-			return nil, fmt.Errorf("failed to parse API response: %v\nRaw response: %s", err, string(body))
-		}
-		return nil, fmt.Errorf("failed to parse API response. Use --verbose for details")
+	if _, err := llmc.DoJSON(ctx, http.MethodGet, url, nil, nil, &result, p.debug); err != nil {
+		return nil, err
 	}
 
-	// Convert to ModelInfo format
-	models := make([]llmc.ModelInfo, 0)
-
+	models := make([]llmc.ModelInfo, 0, len(result.Models))
 	for _, model := range result.Models {
-		// Extract model ID from name (remove "models/" prefix)
-		id := strings.TrimPrefix(model.Name, "models/")
-
 		// Only include models that support generateContent
-		if !contains(model.SupportedGenerationMethods, "generateContent") {
+		if !slices.Contains(model.SupportedGenerationMethods, "generateContent") {
 			continue
 		}
 
@@ -235,10 +201,9 @@ func (p *Provider) ListModels() ([]llmc.ModelInfo, error) {
 		if description == "" {
 			description = model.DisplayName
 		}
-		// If no description available, leave empty
 
 		models = append(models, llmc.ModelInfo{
-			ID:          id,
+			ID:          strings.TrimPrefix(model.Name, "models/"),
 			Description: description,
 			IsDefault:   false, // Set by caller
 		})
@@ -252,177 +217,14 @@ func (p *Provider) ListModels() ([]llmc.ModelInfo, error) {
 	return models, nil
 }
 
-// contains checks if a string slice contains a specific string
-func contains(slice []string, item string) bool {
-	for _, s := range slice {
-		if s == item {
-			return true
-		}
-	}
-	return false
-}
-
-// Chat sends a message to Gemini's API and returns the response
-func (p *Provider) Chat(message string) (string, error) {
-	response, retry, err := p.sendRequest(message, p.webSearchEnabled)
-
-	// If web search was enabled but returned empty response
-	if retry && p.webSearchEnabled {
-		return "", fmt.Errorf("web search returned empty response. Try again without --web-search flag")
-	}
-
-	return response, err
-}
-
-// sendRequest sends a request to Gemini's API and returns the response
-// Returns: (response text, should retry without web search, error)
-func (p *Provider) sendRequest(message string, enableWebSearch bool) (string, bool, error) {
-	// Prepare the request body
-	reqBody := GeminiRequest{
-		Contents: []GeminiContent{
-			{
-				Parts: []GeminiPart{
-					{
-						Text: message,
-					},
-				},
-			},
-		},
-	}
-
-	// Add Google Search tool if enabled
-	if enableWebSearch {
-		reqBody.Tools = []GeminiTool{
-			{
-				GoogleSearch: &GeminiGoogleSearch{},
-			},
-		}
-	}
-
-	// Convert request body to JSON
-	jsonData, err := json.Marshal(reqBody)
-	if err != nil {
-		return "", false, fmt.Errorf("error marshaling request: %v", err)
-	}
-
-	// Extract model name from provider:model format
-	_, modelName, err := llmc.ParseModelString(p.config.GetModel())
-	if err != nil {
-		return "", false, fmt.Errorf("invalid model format: %w", err)
-	}
-
-	// Get token for Gemini
-	token, err := p.config.GetToken(ProviderName)
-	if err != nil {
-		return "", false, fmt.Errorf("failed to get token: %w", err)
-	}
-
-	// Get base URL for Gemini
-	baseURL, err := p.config.GetBaseURL(ProviderName)
-	if err != nil {
-		return "", false, fmt.Errorf("failed to get base URL: %w", err)
-	}
-	if baseURL == "" {
-		baseURL = DefaultBaseURL
-	}
-	url := fmt.Sprintf("%s/models/%s:generateContent?key=%s", baseURL, modelName, token)
-	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonData))
-	if err != nil {
-		return "", false, fmt.Errorf("error creating request: %v", err)
-	}
-
-	// Set headers
-	req.Header.Set("Content-Type", "application/json")
-
-	// Send request
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		return "", false, fmt.Errorf("error sending request: %v", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	// Read response body
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", false, fmt.Errorf("error reading response: %v", err)
-	}
-
-	// Check for error response
-	if resp.StatusCode != http.StatusOK {
-		if p.debug {
-			return "", false, fmt.Errorf("API error (HTTP %d): %s", resp.StatusCode, string(body))
-		}
-		return "", false, fmt.Errorf("API error: %s", string(body))
-	}
-
-	// Debug: print raw response
-	if p.debug {
-		fmt.Fprintf(os.Stderr, "Raw API response: %s\n", string(body))
-	}
-
-	// Parse response
-	var result GeminiResponse
-	if err := json.Unmarshal(body, &result); err != nil {
-		if p.debug {
-			return "", false, fmt.Errorf("error parsing response: %v\nRaw response: %s", err, string(body))
-		}
-		return "", false, fmt.Errorf("error parsing response: %v", err)
-	}
-
-	// Debug: print parsed response structure
-	if p.debug {
-		fmt.Fprintf(os.Stderr, "Candidates count: %d\n", len(result.Candidates))
-		if len(result.Candidates) > 0 {
-			fmt.Fprintf(os.Stderr, "Parts count in first candidate: %d\n", len(result.Candidates[0].Content.Parts))
-		}
-	}
-
-	if len(result.Candidates) == 0 {
-		if p.debug {
-			return "", false, fmt.Errorf("no response from API (empty candidates)\nRaw response: %s", string(body))
-		}
-		return "", false, fmt.Errorf("no response from API")
-	}
-
-	var responseText string
-	shouldRetry := false
-
-	// Check if there's text content in parts
-	if len(result.Candidates[0].Content.Parts) > 0 {
-		responseText = result.Candidates[0].Content.Parts[0].Text
-	}
-
-	// If no text content but grounding metadata exists, mark for retry
-	if responseText == "" && result.GroundingMetadata != nil && enableWebSearch {
-		shouldRetry = true
-		if p.debug {
-			fmt.Fprintf(os.Stderr, "Empty response with grounding metadata detected (known Gemini API issue)\n")
-		}
-	}
-
-	// If still no content and shouldn't retry, return error
-	if responseText == "" && !shouldRetry {
-		if p.debug {
-			return "", false, fmt.Errorf("no response from API (empty parts)\nRaw response: %s", string(body))
-		}
-		return "", false, fmt.Errorf("no response from API")
-	}
-
-	// Format citations if grounding metadata is present
-	if responseText != "" && result.GroundingMetadata != nil && len(result.GroundingMetadata.GroundingChunks) > 0 {
-		citations := extractGroundingCitations(result.GroundingMetadata)
-		if citations != "" {
-			responseText += "\n\n---\nSources:\n" + citations
-		}
-	}
-
-	return responseText, shouldRetry, nil
+// Chat sends a single message to Gemini's API and returns the response
+func (p *Provider) Chat(ctx context.Context, message string) (string, error) {
+	return p.ChatWithHistory(ctx, "", nil, message)
 }
 
 // ChatWithHistory sends a conversation history with a new message to Gemini's API
-func (p *Provider) ChatWithHistory(systemPrompt string, messages []llmc.Message, newMessage string) (string, error) {
-	// Convert messages to GeminiContent array
+func (p *Provider) ChatWithHistory(ctx context.Context, systemPrompt string, messages []llmc.Message, newMessage string) (string, error) {
+	// Convert messages to GeminiContent array and append the new message
 	contents := make([]GeminiContent, 0, len(messages)+1)
 	for _, msg := range messages {
 		role := msg.Role
@@ -435,38 +237,23 @@ func (p *Provider) ChatWithHistory(systemPrompt string, messages []llmc.Message,
 			Parts: []GeminiPart{{Text: msg.Content}},
 		})
 	}
-
-	// Add new user message
 	contents = append(contents, GeminiContent{
 		Role:  "user",
 		Parts: []GeminiPart{{Text: newMessage}},
 	})
 
-	// Prepare the request body
 	reqBody := GeminiRequest{
 		Contents: contents,
 	}
-
-	// Add system instruction if provided
 	if systemPrompt != "" {
 		reqBody.SystemInstruction = &GeminiSystemInstruction{
 			Parts: []GeminiPart{{Text: systemPrompt}},
 		}
 	}
-
-	// Add Google Search tool if enabled
 	if p.webSearchEnabled {
 		reqBody.Tools = []GeminiTool{
-			{
-				GoogleSearch: &GeminiGoogleSearch{},
-			},
+			{GoogleSearch: &GeminiGoogleSearch{}},
 		}
-	}
-
-	// Convert request body to JSON
-	jsonData, err := json.Marshal(reqBody)
-	if err != nil {
-		return "", fmt.Errorf("error marshaling request: %v", err)
 	}
 
 	// Extract model name from provider:model format
@@ -475,73 +262,27 @@ func (p *Provider) ChatWithHistory(systemPrompt string, messages []llmc.Message,
 		return "", fmt.Errorf("invalid model format: %w", err)
 	}
 
-	// Get token for Gemini
-	token, err := p.config.GetToken(ProviderName)
+	url, err := p.endpoint(fmt.Sprintf("/models/%s:generateContent", modelName))
 	if err != nil {
-		return "", fmt.Errorf("failed to get token: %w", err)
+		return "", err
 	}
 
-	// Get base URL for Gemini
-	baseURL, err := p.config.GetBaseURL(ProviderName)
+	var result GeminiResponse
+	body, err := llmc.DoJSON(ctx, http.MethodPost, url, nil, reqBody, &result, p.debug)
 	if err != nil {
-		return "", fmt.Errorf("failed to get base URL: %w", err)
-	}
-	if baseURL == "" {
-		baseURL = DefaultBaseURL
-	}
-	url := fmt.Sprintf("%s/models/%s:generateContent?key=%s", baseURL, modelName, token)
-	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonData))
-	if err != nil {
-		return "", fmt.Errorf("error creating request: %v", err)
+		return "", err
 	}
 
-	// Set headers
-	req.Header.Set("Content-Type", "application/json")
-
-	// Send request
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("error sending request: %v", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	// Read response body
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", fmt.Errorf("error reading response: %v", err)
-	}
-
-	// Check for error response
-	if resp.StatusCode != http.StatusOK {
-		if p.debug {
-			return "", fmt.Errorf("API error (HTTP %d): %s", resp.StatusCode, string(body))
-		}
-		return "", fmt.Errorf("API error: %s", string(body))
-	}
-
-	// Debug: print raw response
 	if p.debug {
 		fmt.Fprintf(os.Stderr, "Raw API response: %s\n", string(body))
 	}
 
-	// Parse response
-	var result GeminiResponse
-	if err := json.Unmarshal(body, &result); err != nil {
-		if p.debug {
-			return "", fmt.Errorf("error parsing response: %v\nRaw response: %s", err, string(body))
-		}
-		return "", fmt.Errorf("error parsing response: %v", err)
-	}
+	return p.extractText(&result, body)
+}
 
-	// Debug: print parsed response structure
-	if p.debug {
-		fmt.Fprintf(os.Stderr, "Candidates count: %d\n", len(result.Candidates))
-		if len(result.Candidates) > 0 {
-			fmt.Fprintf(os.Stderr, "Parts count in first candidate: %d\n", len(result.Candidates[0].Content.Parts))
-		}
-	}
-
+// extractText pulls the response text (and citations) out of a Gemini result.
+// body is the raw response, included in debug error output.
+func (p *Provider) extractText(result *GeminiResponse, body []byte) (string, error) {
 	if len(result.Candidates) == 0 {
 		if p.debug {
 			return "", fmt.Errorf("no response from API (empty candidates)\nRaw response: %s", string(body))
@@ -550,24 +291,14 @@ func (p *Provider) ChatWithHistory(systemPrompt string, messages []llmc.Message,
 	}
 
 	var responseText string
-	shouldRetry := false
-
-	// Check if there's text content in parts
 	if len(result.Candidates[0].Content.Parts) > 0 {
 		responseText = result.Candidates[0].Content.Parts[0].Text
 	}
 
-	// If no text content but grounding metadata exists, mark for retry
-	if responseText == "" && result.GroundingMetadata != nil && p.webSearchEnabled {
-		shouldRetry = true
-		if p.debug {
-			fmt.Fprintf(os.Stderr, "Empty response with grounding metadata detected (known Gemini API issue)\n")
-		}
-	}
-
-	// If still no content, return error
 	if responseText == "" {
-		if shouldRetry {
+		// Known Gemini API issue: web search can return grounding metadata
+		// without any text parts
+		if result.GroundingMetadata != nil && p.webSearchEnabled {
 			return "", fmt.Errorf("web search returned empty response. Try again without --web-search flag")
 		}
 		if p.debug {
@@ -578,8 +309,7 @@ func (p *Provider) ChatWithHistory(systemPrompt string, messages []llmc.Message,
 
 	// Format citations if grounding metadata is present
 	if result.GroundingMetadata != nil && len(result.GroundingMetadata.GroundingChunks) > 0 {
-		citations := extractGroundingCitations(result.GroundingMetadata)
-		if citations != "" {
+		if citations := extractGroundingCitations(result.GroundingMetadata); citations != "" {
 			responseText += "\n\n---\nSources:\n" + citations
 		}
 	}

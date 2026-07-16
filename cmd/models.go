@@ -1,6 +1,3 @@
-/*
-Copyright © 2025 NAME HERE <EMAIL ADDRESS>
-*/
 package cmd
 
 import (
@@ -111,22 +108,14 @@ Example:
 			}
 
 			// Get models
-			var models []llmc.ModelInfo
-			var modelsErr error
-			switch targetProvider {
-			case openai.ProviderName:
-				provider := openai.NewProvider(cfg)
-				provider.SetDebug(verbose)
-				models, modelsErr = provider.ListModels()
-			case gemini.ProviderName:
-				provider := gemini.NewProvider(cfg)
-				provider.SetDebug(verbose)
-				models, modelsErr = provider.ListModels()
-			case anthropic.ProviderName:
-				provider := anthropic.NewProvider(cfg)
-				provider.SetDebug(verbose)
-				models, modelsErr = provider.ListModels()
+			provider, err := newProviderByName(cfg, targetProvider)
+			if err != nil {
+				result.err = err
+				results = append(results, result)
+				continue
 			}
+			provider.SetDebug(verbose)
+			models, modelsErr := provider.ListModels(cmd.Context())
 
 			if modelsErr != nil {
 				result.err = fmt.Errorf("failed to list models: %w", modelsErr)
@@ -333,7 +322,7 @@ Example:
 		}
 		p.SetDebug(verbose)
 
-		models, err := p.ListModels()
+		models, err := p.ListModels(cmd.Context())
 		if err != nil {
 			return fmt.Errorf("listing models for %s: %w", provider, err)
 		}

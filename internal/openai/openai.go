@@ -1,10 +1,8 @@
 package openai
 
 import (
-	"bytes"
-	"encoding/json"
+	"context"
 	"fmt"
-	"io"
 	"net/http"
 	"sort"
 	"strings"
@@ -36,7 +34,7 @@ type ModelData struct {
 type ResponsesAPIRequest struct {
 	Model        string             `json:"model"`
 	Instructions string             `json:"instructions,omitempty"` // System-level instructions (optional)
-	Input        any                `json:"input"`                  // string or []InputMessage
+	Input        []InputMessage     `json:"input"`                  // Conversation messages
 	Tools        []ResponsesAPITool `json:"tools,omitempty"`
 }
 
@@ -122,77 +120,40 @@ func (p *Provider) SetDebug(enabled bool) {
 	p.debug = enabled
 }
 
-// ListModels returns the list of supported models from the API
-func (p *Provider) ListModels() ([]llmc.ModelInfo, error) {
-	// Get token for OpenAI
+// endpoint resolves the token and base URL and returns the full URL for path
+// along with the request headers.
+func (p *Provider) endpoint(path string) (string, map[string]string, error) {
 	token, err := p.config.GetToken(ProviderName)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get token: %w", err)
+		return "", nil, fmt.Errorf("failed to get token: %w", err)
 	}
-
-	// Get base URL for OpenAI
 	baseURL, err := p.config.GetBaseURL(ProviderName)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get base URL: %w", err)
+		return "", nil, fmt.Errorf("failed to get base URL: %w", err)
 	}
+	return baseURL + path, map[string]string{"Authorization": "Bearer " + token}, nil
+}
 
-	// Create HTTP request
-	req, err := http.NewRequest("GET", baseURL+"/models", nil)
+// ListModels returns the list of supported models from the API
+func (p *Provider) ListModels(ctx context.Context) ([]llmc.ModelInfo, error) {
+	url, headers, err := p.endpoint("/models")
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %v", err)
+		return nil, err
 	}
 
-	// Set headers
-	req.Header.Set("Authorization", "Bearer "+token)
-
-	// Send request
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		if p.debug {
-			return nil, fmt.Errorf("failed to connect to API: %v", err)
-		}
-		return nil, fmt.Errorf("failed to connect to API. Use --verbose for details")
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	// Read response body
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response: %v", err)
-	}
-
-	// Check for error response
-	if resp.StatusCode != http.StatusOK {
-		if p.debug {
-			return nil, fmt.Errorf("API request failed (HTTP %d): %s", resp.StatusCode, string(body))
-		}
-		return nil, fmt.Errorf("API request failed (HTTP %d). Use --verbose for details", resp.StatusCode)
-	}
-
-	// Parse response
 	var result ModelsAPIResponse
-	if err := json.Unmarshal(body, &result); err != nil {
-		if p.debug {
-			return nil, fmt.Errorf("failed to parse API response: %v\nRaw response: %s", err, string(body))
-		}
-		return nil, fmt.Errorf("failed to parse API response. Use --verbose for details")
+	if _, err := llmc.DoJSON(ctx, http.MethodGet, url, headers, nil, &result, p.debug); err != nil {
+		return nil, err
 	}
 
-	// Convert to ModelInfo format
-	models := make([]llmc.ModelInfo, 0)
-
+	models := make([]llmc.ModelInfo, 0, len(result.Data))
+	jst := time.FixedZone("Asia/Tokyo", 9*60*60)
 	for _, model := range result.Data {
-		id := model.ID
-
 		// Convert created timestamp to JST and use as description
-		jst := time.FixedZone("Asia/Tokyo", 9*60*60)
 		createdTime := time.Unix(model.Created, 0).In(jst)
-		description := fmt.Sprintf("Created: %s", createdTime.Format("2006-01-02 15:04:05 JST"))
-
 		models = append(models, llmc.ModelInfo{
-			ID:          id,
-			Description: description,
+			ID:          model.ID,
+			Description: fmt.Sprintf("Created: %s", createdTime.Format("2006-01-02 15:04:05 JST")),
 			IsDefault:   false, // Set by caller
 		})
 	}
@@ -205,154 +166,20 @@ func (p *Provider) ListModels() ([]llmc.ModelInfo, error) {
 	return models, nil
 }
 
-// Chat sends a message to OpenAI's Responses API and returns the response
-func (p *Provider) Chat(message string) (string, error) {
-	// Extract model name from provider:model format
-	_, modelName, err := llmc.ParseModelString(p.config.GetModel())
-	if err != nil {
-		return "", fmt.Errorf("invalid model format: %w", err)
-	}
-
-	// Prepare the request body
-	reqBody := ResponsesAPIRequest{
-		Model: modelName,
-		Input: message,
-	}
-
-	// Add web_search tool if enabled
-	if p.webSearchEnabled {
-		reqBody.Tools = []ResponsesAPITool{
-			{Type: "web_search"},
-		}
-	}
-
-	// Convert request body to JSON
-	jsonData, err := json.Marshal(reqBody)
-	if err != nil {
-		return "", fmt.Errorf("error marshaling request: %v", err)
-	}
-
-	// Get token for OpenAI
-	token, err := p.config.GetToken(ProviderName)
-	if err != nil {
-		return "", fmt.Errorf("failed to get token: %w", err)
-	}
-
-	// Get base URL for OpenAI
-	baseURL, err := p.config.GetBaseURL(ProviderName)
-	if err != nil {
-		return "", fmt.Errorf("failed to get base URL: %w", err)
-	}
-
-	// Create HTTP request
-	req, err := http.NewRequest("POST", baseURL+"/responses", bytes.NewBuffer(jsonData))
-	if err != nil {
-		return "", fmt.Errorf("error creating request: %v", err)
-	}
-
-	// Set headers
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+token)
-
-	// Send request
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("error sending request: %v", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	// Read response body
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", fmt.Errorf("error reading response: %v", err)
-	}
-
-	// Check for error response
-	if resp.StatusCode != http.StatusOK {
-		if p.debug {
-			return "", fmt.Errorf("API request failed (HTTP %d): %s", resp.StatusCode, string(body))
-		}
-		return "", fmt.Errorf("API request failed (HTTP %d). Use --verbose for details", resp.StatusCode)
-	}
-
-	// Parse response
-	var result ResponsesAPIResponse
-	if err := json.Unmarshal(body, &result); err != nil {
-		if p.debug {
-			return "", fmt.Errorf("failed to parse API response: %v\nRaw response: %s", err, string(body))
-		}
-		return "", fmt.Errorf("failed to parse API response. Use --verbose for details")
-	}
-
-	// Check for API error in response
-	if result.Error != nil {
-		if p.debug {
-			return "", fmt.Errorf("API error [%s]: %s (id=%s, status=%s)",
-				result.Error.Code, result.Error.Message, result.ID, result.Status)
-		}
-		return "", fmt.Errorf("API error: %s", result.Error.Message)
-	}
-
-	if len(result.Output) == 0 {
-		if p.debug {
-			return "", fmt.Errorf("API returned empty response (id=%s, status=%s)\nRaw response: %s",
-				result.ID, result.Status, string(body))
-		}
-		return "", fmt.Errorf("API returned empty response. Use --verbose for details")
-	}
-
-	// Find the message output (web_search returns multiple outputs)
-	var messageOutput *ResponsesAPIOutput
-	var outputTypes []string
-	for i := range result.Output {
-		outputTypes = append(outputTypes, result.Output[i].Type)
-		if result.Output[i].Type == "message" {
-			messageOutput = &result.Output[i]
-			break
-		}
-	}
-
-	if messageOutput == nil {
-		if p.debug {
-			return "", fmt.Errorf("no message found in API response (found types: %v)\nRaw response: %s",
-				outputTypes, string(body))
-		}
-		return "", fmt.Errorf("no message found in API response (found: %v). Use --verbose for details", outputTypes)
-	}
-
-	if len(messageOutput.Content) == 0 {
-		if p.debug {
-			return "", fmt.Errorf("message has no content (id=%s, status=%s)\nRaw response: %s",
-				result.ID, result.Status, string(body))
-		}
-		return "", fmt.Errorf("message has no content. Use --verbose for details")
-	}
-
-	// Extract text and citations
-	content := messageOutput.Content[0]
-	responseText := content.Text
-
-	// Format citations if present
-	if len(content.Annotations) > 0 {
-		citations := extractCitations(content.Annotations)
-		if citations != "" {
-			responseText += "\n\n---\nSources:\n" + citations
-		}
-	}
-
-	return responseText, nil
+// Chat sends a single message to OpenAI's Responses API and returns the response
+func (p *Provider) Chat(ctx context.Context, message string) (string, error) {
+	return p.ChatWithHistory(ctx, "", nil, message)
 }
 
 // ChatWithHistory sends a conversation history with a new message to OpenAI's Responses API
-func (p *Provider) ChatWithHistory(systemPrompt string, messages []llmc.Message, newMessage string) (string, error) {
+func (p *Provider) ChatWithHistory(ctx context.Context, systemPrompt string, messages []llmc.Message, newMessage string) (string, error) {
 	// Extract model name from provider:model format
 	_, modelName, err := llmc.ParseModelString(p.config.GetModel())
 	if err != nil {
 		return "", fmt.Errorf("invalid model format: %w", err)
 	}
 
-	// Convert messages to InputMessage array
+	// Convert messages to InputMessage array and append the new message
 	inputMessages := make([]InputMessage, 0, len(messages)+1)
 	for _, msg := range messages {
 		inputMessages = append(inputMessages, InputMessage{
@@ -360,87 +187,39 @@ func (p *Provider) ChatWithHistory(systemPrompt string, messages []llmc.Message,
 			Content: msg.Content,
 		})
 	}
-
-	// Add new message
 	inputMessages = append(inputMessages, InputMessage{
 		Role:    "user",
 		Content: newMessage,
 	})
 
-	// Prepare the request body
 	reqBody := ResponsesAPIRequest{
 		Model:        modelName,
 		Instructions: systemPrompt, // Can be empty string
 		Input:        inputMessages,
 	}
-
-	// Add web_search tool if enabled
 	if p.webSearchEnabled {
 		reqBody.Tools = []ResponsesAPITool{
 			{Type: "web_search"},
 		}
 	}
 
-	// Convert request body to JSON
-	jsonData, err := json.Marshal(reqBody)
+	url, headers, err := p.endpoint("/responses")
 	if err != nil {
-		return "", fmt.Errorf("error marshaling request: %v", err)
+		return "", err
 	}
 
-	// Get token for OpenAI
-	token, err := p.config.GetToken(ProviderName)
-	if err != nil {
-		return "", fmt.Errorf("failed to get token: %w", err)
-	}
-
-	// Get base URL for OpenAI
-	baseURL, err := p.config.GetBaseURL(ProviderName)
-	if err != nil {
-		return "", fmt.Errorf("failed to get base URL: %w", err)
-	}
-
-	// Create HTTP request
-	req, err := http.NewRequest("POST", baseURL+"/responses", bytes.NewBuffer(jsonData))
-	if err != nil {
-		return "", fmt.Errorf("error creating request: %v", err)
-	}
-
-	// Set headers
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+token)
-
-	// Send request
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("error sending request: %v", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	// Read response body
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", fmt.Errorf("error reading response: %v", err)
-	}
-
-	// Check for error response
-	if resp.StatusCode != http.StatusOK {
-		if p.debug {
-			return "", fmt.Errorf("API request failed (HTTP %d): %s", resp.StatusCode, string(body))
-		}
-		return "", fmt.Errorf("API request failed (HTTP %d). Use --verbose for details", resp.StatusCode)
-	}
-
-	// Parse response
 	var result ResponsesAPIResponse
-	if err := json.Unmarshal(body, &result); err != nil {
-		if p.debug {
-			return "", fmt.Errorf("failed to parse API response: %v\nRaw response: %s", err, string(body))
-		}
-		return "", fmt.Errorf("failed to parse API response. Use --verbose for details")
+	body, err := llmc.DoJSON(ctx, http.MethodPost, url, headers, reqBody, &result, p.debug)
+	if err != nil {
+		return "", err
 	}
 
-	// Check for API error in response
+	return p.extractText(&result, body)
+}
+
+// extractText pulls the message text (and citations) out of a Responses API
+// result. body is the raw response, included in debug error output.
+func (p *Provider) extractText(result *ResponsesAPIResponse, body []byte) (string, error) {
 	if result.Error != nil {
 		if p.debug {
 			return "", fmt.Errorf("API error [%s]: %s (id=%s, status=%s)",
@@ -487,11 +266,8 @@ func (p *Provider) ChatWithHistory(systemPrompt string, messages []llmc.Message,
 	// Extract text and citations
 	content := messageOutput.Content[0]
 	responseText := content.Text
-
-	// Format citations if present
 	if len(content.Annotations) > 0 {
-		citations := extractCitations(content.Annotations)
-		if citations != "" {
+		if citations := extractCitations(content.Annotations); citations != "" {
 			responseText += "\n\n---\nSources:\n" + citations
 		}
 	}

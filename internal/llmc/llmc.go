@@ -4,6 +4,7 @@
 package llmc
 
 import (
+	"context"
 	"fmt"
 	"strings"
 )
@@ -22,16 +23,18 @@ type ModelInfo struct {
 //
 //	provider := openai.NewProvider(cfg)
 //	provider.SetWebSearch(true)
-//	response, err := provider.Chat("Hello, world!")
+//	response, err := provider.Chat(ctx, "Hello, world!")
 type Provider interface {
 	// Chat sends a single message and returns the response.
-	Chat(message string) (string, error)
+	// Canceling ctx aborts the in-flight API request.
+	Chat(ctx context.Context, message string) (string, error)
 
 	// ChatWithHistory sends a message with conversation history.
 	// The systemPrompt is prepended to the conversation.
 	// messages contains the conversation history (user and assistant messages).
 	// newMessage is the new user message to send.
-	ChatWithHistory(systemPrompt string, messages []Message, newMessage string) (string, error)
+	// Canceling ctx aborts the in-flight API request.
+	ChatWithHistory(ctx context.Context, systemPrompt string, messages []Message, newMessage string) (string, error)
 
 	// SetWebSearch enables or disables web search for the provider.
 	SetWebSearch(enabled bool)
@@ -43,7 +46,7 @@ type Provider interface {
 	SetDebug(enabled bool)
 
 	// ListModels returns a list of available models for the provider.
-	ListModels() ([]ModelInfo, error)
+	ListModels(ctx context.Context) ([]ModelInfo, error)
 }
 
 // ParseModelString parses a model string in "provider:model" format.

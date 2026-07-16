@@ -1,6 +1,7 @@
 package openai
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -112,7 +113,7 @@ func TestChat(t *testing.T) {
 	defer server.Close()
 
 	p := newTestProvider(server.URL)
-	got, err := p.Chat("hello")
+	got, err := p.Chat(context.Background(), "hello")
 	if err != nil {
 		t.Fatalf("Chat() unexpected error: %v", err)
 	}
@@ -129,8 +130,10 @@ func TestChat(t *testing.T) {
 	if gotReq.Model != "gpt-4" {
 		t.Errorf("request model = %v, want gpt-4 (provider prefix stripped)", gotReq.Model)
 	}
-	if gotReq.Input != "hello" {
-		t.Errorf("request input = %v, want hello", gotReq.Input)
+	// Chat delegates to ChatWithHistory, so the input is a single-message array
+	wantInput := []InputMessage{{Role: "user", Content: "hello"}}
+	if len(gotReq.Input) != 1 || gotReq.Input[0] != wantInput[0] {
+		t.Errorf("request input = %v, want %v", gotReq.Input, wantInput)
 	}
 	if len(gotReq.Tools) != 0 {
 		t.Errorf("request tools = %v, want none", gotReq.Tools)
@@ -169,7 +172,7 @@ func TestChatWebSearchAddsTool(t *testing.T) {
 	p := newTestProvider(server.URL)
 	p.SetWebSearch(true)
 
-	got, err := p.Chat("search this")
+	got, err := p.Chat(context.Background(), "search this")
 	if err != nil {
 		t.Fatalf("Chat() unexpected error: %v", err)
 	}
@@ -239,7 +242,7 @@ func TestChatErrors(t *testing.T) {
 			defer server.Close()
 
 			p := newTestProvider(server.URL)
-			_, err := p.Chat("hello")
+			_, err := p.Chat(context.Background(), "hello")
 			if err == nil {
 				t.Fatal("Chat() expected error, got nil")
 			}
@@ -284,7 +287,7 @@ func TestChatWithHistory(t *testing.T) {
 		{Role: "assistant", Content: "first answer"},
 	}
 
-	got, err := p.ChatWithHistory("be helpful", history, "second question")
+	got, err := p.ChatWithHistory(context.Background(), "be helpful", history, "second question")
 	if err != nil {
 		t.Fatalf("ChatWithHistory() unexpected error: %v", err)
 	}
@@ -331,7 +334,7 @@ func TestListModels(t *testing.T) {
 	defer server.Close()
 
 	p := newTestProvider(server.URL)
-	models, err := p.ListModels()
+	models, err := p.ListModels(context.Background())
 	if err != nil {
 		t.Fatalf("ListModels() unexpected error: %v", err)
 	}
@@ -356,7 +359,7 @@ func TestListModelsHTTPError(t *testing.T) {
 	defer server.Close()
 
 	p := newTestProvider(server.URL)
-	if _, err := p.ListModels(); err == nil {
+	if _, err := p.ListModels(context.Background()); err == nil {
 		t.Error("ListModels() expected error for HTTP 500, got nil")
 	}
 }

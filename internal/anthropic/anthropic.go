@@ -1,10 +1,10 @@
 package anthropic
 
 import (
-	"bytes"
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"sort"
 	"strings"
@@ -125,70 +125,38 @@ func (p *Provider) SetDebug(enabled bool) {
 	p.debug = enabled
 }
 
-// ListModels returns the list of supported models from the API
-func (p *Provider) ListModels() ([]llmc.ModelInfo, error) {
-	// Get token for Anthropic
+// endpoint resolves the token and base URL and returns the full URL for path
+// along with the request headers.
+func (p *Provider) endpoint(path string) (string, map[string]string, error) {
 	token, err := p.config.GetToken(ProviderName)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get token: %w", err)
+		return "", nil, fmt.Errorf("failed to get token: %w", err)
 	}
-
-	// Get base URL for Anthropic
 	baseURL, err := p.config.GetBaseURL(ProviderName)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get base URL: %w", err)
+		return "", nil, fmt.Errorf("failed to get base URL: %w", err)
 	}
+	headers := map[string]string{
+		"x-api-key":         token,
+		"anthropic-version": AnthropicVersion,
+	}
+	return baseURL + path, headers, nil
+}
 
-	// Create HTTP request
-	req, err := http.NewRequest("GET", baseURL+"/models", nil)
+// ListModels returns the list of supported models from the API
+func (p *Provider) ListModels(ctx context.Context) ([]llmc.ModelInfo, error) {
+	url, headers, err := p.endpoint("/models")
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %v", err)
+		return nil, err
 	}
 
-	// Set headers
-	req.Header.Set("x-api-key", token)
-	req.Header.Set("anthropic-version", AnthropicVersion)
-
-	// Send request
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		if p.debug {
-			return nil, fmt.Errorf("failed to connect to API: %v", err)
-		}
-		return nil, fmt.Errorf("failed to connect to API. Use --verbose for details")
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	// Read response body
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response: %v", err)
-	}
-
-	// Check for error response
-	if resp.StatusCode != http.StatusOK {
-		if p.debug {
-			return nil, fmt.Errorf("API request failed (HTTP %d): %s", resp.StatusCode, string(body))
-		}
-		return nil, fmt.Errorf("API request failed (HTTP %d). Use --verbose for details", resp.StatusCode)
-	}
-
-	// Parse response
 	var result ModelsAPIResponse
-	if err := json.Unmarshal(body, &result); err != nil {
-		if p.debug {
-			return nil, fmt.Errorf("failed to parse API response: %v\nRaw response: %s", err, string(body))
-		}
-		return nil, fmt.Errorf("failed to parse API response. Use --verbose for details")
+	if _, err := llmc.DoJSON(ctx, http.MethodGet, url, headers, nil, &result, p.debug); err != nil {
+		return nil, err
 	}
 
-	// Convert to ModelInfo format
-	models := make([]llmc.ModelInfo, 0)
-
+	models := make([]llmc.ModelInfo, 0, len(result.Data))
 	for _, model := range result.Data {
-		id := model.ID
-
 		// Use display name as description if available
 		description := model.DisplayName
 		if description == "" && !model.CreatedAt.IsZero() {
@@ -199,7 +167,7 @@ func (p *Provider) ListModels() ([]llmc.ModelInfo, error) {
 		}
 
 		models = append(models, llmc.ModelInfo{
-			ID:          id,
+			ID:          model.ID,
 			Description: description,
 			IsDefault:   false, // Set by caller
 		})
@@ -213,143 +181,13 @@ func (p *Provider) ListModels() ([]llmc.ModelInfo, error) {
 	return models, nil
 }
 
-// Chat sends a message to Anthropic's Messages API and returns the response
-func (p *Provider) Chat(message string) (string, error) {
-	// Check if web search is enabled (not supported by Anthropic)
-	if p.webSearchEnabled {
-		return "", fmt.Errorf("web search is not supported by Anthropic provider")
-	}
-
-	// Extract model name from provider:model format
-	_, modelName, err := llmc.ParseModelString(p.config.GetModel())
-	if err != nil {
-		return "", fmt.Errorf("invalid model format: %w", err)
-	}
-
-	// Prepare the request body
-	reqBody := MessagesAPIRequest{
-		Model:     modelName,
-		MaxTokens: 8192, // Default max tokens
-		Messages: []MessageInput{
-			{
-				Role: "user",
-				Content: []Content{
-					{
-						Type: "text",
-						Text: message,
-					},
-				},
-			},
-		},
-	}
-
-	// Convert request body to JSON
-	jsonData, err := json.Marshal(reqBody)
-	if err != nil {
-		return "", fmt.Errorf("error marshaling request: %v", err)
-	}
-
-	// Get token for Anthropic
-	token, err := p.config.GetToken(ProviderName)
-	if err != nil {
-		return "", fmt.Errorf("failed to get token: %w", err)
-	}
-
-	// Get base URL for Anthropic
-	baseURL, err := p.config.GetBaseURL(ProviderName)
-	if err != nil {
-		return "", fmt.Errorf("failed to get base URL: %w", err)
-	}
-
-	// Create HTTP request
-	req, err := http.NewRequest("POST", baseURL+"/messages", bytes.NewBuffer(jsonData))
-	if err != nil {
-		return "", fmt.Errorf("error creating request: %v", err)
-	}
-
-	// Set headers
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("x-api-key", token)
-	req.Header.Set("anthropic-version", AnthropicVersion)
-
-	// Send request
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("error sending request: %v", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	// Read response body
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", fmt.Errorf("error reading response: %v", err)
-	}
-
-	// Check for error response
-	if resp.StatusCode != http.StatusOK {
-		// Try to parse error message
-		var errResp MessagesAPIResponse
-		if json.Unmarshal(body, &errResp) == nil && errResp.Error != nil {
-			if p.debug {
-				return "", fmt.Errorf("API error [%s]: %s (HTTP %d)", errResp.Error.Type, errResp.Error.Message, resp.StatusCode)
-			}
-			return "", fmt.Errorf("API error: %s", errResp.Error.Message)
-		}
-
-		if p.debug {
-			return "", fmt.Errorf("API request failed (HTTP %d): %s", resp.StatusCode, string(body))
-		}
-		return "", fmt.Errorf("API request failed (HTTP %d). Use --verbose for details", resp.StatusCode)
-	}
-
-	// Parse response
-	var result MessagesAPIResponse
-	if err := json.Unmarshal(body, &result); err != nil {
-		if p.debug {
-			return "", fmt.Errorf("failed to parse API response: %v\nRaw response: %s", err, string(body))
-		}
-		return "", fmt.Errorf("failed to parse API response. Use --verbose for details")
-	}
-
-	// Check for API error in response
-	if result.Error != nil {
-		if p.debug {
-			return "", fmt.Errorf("API error [%s]: %s (id=%s)",
-				result.Error.Type, result.Error.Message, result.ID)
-		}
-		return "", fmt.Errorf("API error: %s", result.Error.Message)
-	}
-
-	if len(result.Content) == 0 {
-		if p.debug {
-			return "", fmt.Errorf("API returned empty response (id=%s)\nRaw response: %s",
-				result.ID, string(body))
-		}
-		return "", fmt.Errorf("API returned empty response. Use --verbose for details")
-	}
-
-	// Extract text from content blocks
-	var textBlocks []string
-	for _, content := range result.Content {
-		if content.Type == "text" && content.Text != "" {
-			textBlocks = append(textBlocks, content.Text)
-		}
-	}
-
-	if len(textBlocks) == 0 {
-		if p.debug {
-			return "", fmt.Errorf("no text content found in API response (id=%s)\nRaw response: %s",
-				result.ID, string(body))
-		}
-		return "", fmt.Errorf("no text content found in API response. Use --verbose for details")
-	}
-
-	return strings.Join(textBlocks, "\n"), nil
+// Chat sends a single message to Anthropic's Messages API and returns the response
+func (p *Provider) Chat(ctx context.Context, message string) (string, error) {
+	return p.ChatWithHistory(ctx, "", nil, message)
 }
 
 // ChatWithHistory sends a conversation history with a new message to Anthropic's Messages API
-func (p *Provider) ChatWithHistory(systemPrompt string, messages []llmc.Message, newMessage string) (string, error) {
+func (p *Provider) ChatWithHistory(ctx context.Context, systemPrompt string, messages []llmc.Message, newMessage string) (string, error) {
 	// Check if web search is enabled (not supported by Anthropic)
 	if p.webSearchEnabled {
 		return "", fmt.Errorf("web search is not supported by Anthropic provider")
@@ -361,32 +199,19 @@ func (p *Provider) ChatWithHistory(systemPrompt string, messages []llmc.Message,
 		return "", fmt.Errorf("invalid model format: %w", err)
 	}
 
-	// Convert messages to MessageInput array
+	// Convert messages to MessageInput array and append the new message
 	inputMessages := make([]MessageInput, 0, len(messages)+1)
 	for _, msg := range messages {
 		inputMessages = append(inputMessages, MessageInput{
-			Role: msg.Role,
-			Content: []Content{
-				{
-					Type: "text",
-					Text: msg.Content,
-				},
-			},
+			Role:    msg.Role,
+			Content: []Content{{Type: "text", Text: msg.Content}},
 		})
 	}
-
-	// Add new user message
 	inputMessages = append(inputMessages, MessageInput{
-		Role: "user",
-		Content: []Content{
-			{
-				Type: "text",
-				Text: newMessage,
-			},
-		},
+		Role:    "user",
+		Content: []Content{{Type: "text", Text: newMessage}},
 	})
 
-	// Prepare the request body
 	reqBody := MessagesAPIRequest{
 		Model:     modelName,
 		MaxTokens: 8192, // Default max tokens
@@ -394,76 +219,35 @@ func (p *Provider) ChatWithHistory(systemPrompt string, messages []llmc.Message,
 		Messages:  inputMessages,
 	}
 
-	// Convert request body to JSON
-	jsonData, err := json.Marshal(reqBody)
+	url, headers, err := p.endpoint("/messages")
 	if err != nil {
-		return "", fmt.Errorf("error marshaling request: %v", err)
+		return "", err
 	}
 
-	// Get token for Anthropic
-	token, err := p.config.GetToken(ProviderName)
-	if err != nil {
-		return "", fmt.Errorf("failed to get token: %w", err)
-	}
-
-	// Get base URL for Anthropic
-	baseURL, err := p.config.GetBaseURL(ProviderName)
-	if err != nil {
-		return "", fmt.Errorf("failed to get base URL: %w", err)
-	}
-
-	// Create HTTP request
-	req, err := http.NewRequest("POST", baseURL+"/messages", bytes.NewBuffer(jsonData))
-	if err != nil {
-		return "", fmt.Errorf("error creating request: %v", err)
-	}
-
-	// Set headers
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("x-api-key", token)
-	req.Header.Set("anthropic-version", AnthropicVersion)
-
-	// Send request
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("error sending request: %v", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	// Read response body
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", fmt.Errorf("error reading response: %v", err)
-	}
-
-	// Check for error response
-	if resp.StatusCode != http.StatusOK {
-		// Try to parse error message
-		var errResp MessagesAPIResponse
-		if json.Unmarshal(body, &errResp) == nil && errResp.Error != nil {
-			if p.debug {
-				return "", fmt.Errorf("API error [%s]: %s (HTTP %d)", errResp.Error.Type, errResp.Error.Message, resp.StatusCode)
-			}
-			return "", fmt.Errorf("API error: %s", errResp.Error.Message)
-		}
-
-		if p.debug {
-			return "", fmt.Errorf("API request failed (HTTP %d): %s", resp.StatusCode, string(body))
-		}
-		return "", fmt.Errorf("API request failed (HTTP %d). Use --verbose for details", resp.StatusCode)
-	}
-
-	// Parse response
 	var result MessagesAPIResponse
-	if err := json.Unmarshal(body, &result); err != nil {
-		if p.debug {
-			return "", fmt.Errorf("failed to parse API response: %v\nRaw response: %s", err, string(body))
+	body, err := llmc.DoJSON(ctx, http.MethodPost, url, headers, reqBody, &result, p.debug)
+	if err != nil {
+		// Anthropic error bodies carry a structured message; surface it when parseable
+		var statusErr *llmc.HTTPStatusError
+		if errors.As(err, &statusErr) {
+			var errResp MessagesAPIResponse
+			if json.Unmarshal(statusErr.Body, &errResp) == nil && errResp.Error != nil {
+				if p.debug {
+					return "", fmt.Errorf("API error [%s]: %s (HTTP %d)",
+						errResp.Error.Type, errResp.Error.Message, statusErr.StatusCode)
+				}
+				return "", fmt.Errorf("API error: %s", errResp.Error.Message)
+			}
 		}
-		return "", fmt.Errorf("failed to parse API response. Use --verbose for details")
+		return "", err
 	}
 
-	// Check for API error in response
+	return p.extractText(&result, body)
+}
+
+// extractText pulls the text blocks out of a Messages API result. body is the
+// raw response, included in debug error output.
+func (p *Provider) extractText(result *MessagesAPIResponse, body []byte) (string, error) {
 	if result.Error != nil {
 		if p.debug {
 			return "", fmt.Errorf("API error [%s]: %s (id=%s)",

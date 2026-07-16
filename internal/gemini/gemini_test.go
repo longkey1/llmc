@@ -1,6 +1,7 @@
 package gemini
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -27,42 +28,6 @@ func newTestProvider(baseURL string) *Provider {
 		baseURL: baseURL,
 		token:   "test-token",
 	})
-}
-
-func TestContains(t *testing.T) {
-	tests := []struct {
-		name  string
-		slice []string
-		item  string
-		want  bool
-	}{
-		{
-			name:  "found",
-			slice: []string{"generateContent", "countTokens"},
-			item:  "generateContent",
-			want:  true,
-		},
-		{
-			name:  "not found",
-			slice: []string{"countTokens"},
-			item:  "generateContent",
-			want:  false,
-		},
-		{
-			name:  "empty slice",
-			slice: nil,
-			item:  "generateContent",
-			want:  false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := contains(tt.slice, tt.item); got != tt.want {
-				t.Errorf("contains(%v, %q) = %v, want %v", tt.slice, tt.item, got, tt.want)
-			}
-		})
-	}
 }
 
 func TestExtractGroundingCitations(t *testing.T) {
@@ -152,7 +117,7 @@ func TestChat(t *testing.T) {
 	defer server.Close()
 
 	p := newTestProvider(server.URL)
-	got, err := p.Chat("hello")
+	got, err := p.Chat(context.Background(), "hello")
 	if err != nil {
 		t.Fatalf("Chat() unexpected error: %v", err)
 	}
@@ -204,7 +169,7 @@ func TestChatWebSearch(t *testing.T) {
 	p := newTestProvider(server.URL)
 	p.SetWebSearch(true)
 
-	got, err := p.Chat("search this")
+	got, err := p.Chat(context.Background(), "search this")
 	if err != nil {
 		t.Fatalf("Chat() unexpected error: %v", err)
 	}
@@ -238,7 +203,7 @@ func TestChatWebSearchEmptyResponseRetryError(t *testing.T) {
 	p := newTestProvider(server.URL)
 	p.SetWebSearch(true)
 
-	_, err := p.Chat("search this")
+	_, err := p.Chat(context.Background(), "search this")
 	if err == nil {
 		t.Fatal("Chat() expected error for empty web search response, got nil")
 	}
@@ -258,7 +223,7 @@ func TestChatErrors(t *testing.T) {
 			name:        "http error status",
 			status:      http.StatusBadRequest,
 			response:    `{"error":"bad"}`,
-			wantErrPart: "API error",
+			wantErrPart: "API request failed (HTTP 400)",
 		},
 		{
 			name:        "empty candidates",
@@ -276,7 +241,7 @@ func TestChatErrors(t *testing.T) {
 			name:        "invalid json",
 			status:      http.StatusOK,
 			response:    `{not-json`,
-			wantErrPart: "error parsing response",
+			wantErrPart: "failed to parse API response",
 		},
 	}
 
@@ -291,7 +256,7 @@ func TestChatErrors(t *testing.T) {
 			defer server.Close()
 
 			p := newTestProvider(server.URL)
-			_, err := p.Chat("hello")
+			_, err := p.Chat(context.Background(), "hello")
 			if err == nil {
 				t.Fatal("Chat() expected error, got nil")
 			}
@@ -330,7 +295,7 @@ func TestChatWithHistory(t *testing.T) {
 		{Role: "assistant", Content: "first answer"},
 	}
 
-	got, err := p.ChatWithHistory("be helpful", history, "second question")
+	got, err := p.ChatWithHistory(context.Background(), "be helpful", history, "second question")
 	if err != nil {
 		t.Fatalf("ChatWithHistory() unexpected error: %v", err)
 	}
@@ -384,7 +349,7 @@ func TestChatWithHistoryNoSystemPrompt(t *testing.T) {
 	defer server.Close()
 
 	p := newTestProvider(server.URL)
-	if _, err := p.ChatWithHistory("", nil, "question"); err != nil {
+	if _, err := p.ChatWithHistory(context.Background(), "", nil, "question"); err != nil {
 		t.Fatalf("ChatWithHistory() unexpected error: %v", err)
 	}
 	if gotReq.SystemInstruction != nil {
@@ -426,7 +391,7 @@ func TestListModels(t *testing.T) {
 	defer server.Close()
 
 	p := newTestProvider(server.URL)
-	models, err := p.ListModels()
+	models, err := p.ListModels(context.Background())
 	if err != nil {
 		t.Fatalf("ListModels() unexpected error: %v", err)
 	}

@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -127,14 +128,6 @@ The ID can be a short ID (minimum 4 characters), full UUID, or "latest" for the 
 		fmt.Println("Message History:")
 		fmt.Println("----------------")
 		for i, msg := range sess.Messages {
-			timestamp := ""
-			if t, ok := msg.Timestamp.(string); ok {
-				// Parse timestamp if it's a string
-				timestamp = t
-			} else {
-				timestamp = fmt.Sprintf("%v", msg.Timestamp)
-			}
-
 			roleLabel := "You"
 			if msg.Role == "assistant" {
 				roleLabel = "Assistant"
@@ -143,7 +136,7 @@ The ID can be a short ID (minimum 4 characters), full UUID, or "latest" for the 
 			fmt.Printf("\n[%d] %s (%s):\n%s\n",
 				i+1,
 				roleLabel,
-				timestamp,
+				msg.Timestamp.Format("2006-01-02 15:04:05"),
 				msg.Content,
 			)
 		}
@@ -523,8 +516,10 @@ Conversation history:
 
 		fmt.Fprintf(os.Stderr, "Generating summary using %s...\n", sess.Model)
 
-		// Generate summary
-		summary, err := llmProvider.Chat(summarizationPrompt)
+		// Generate summary (Ctrl+C aborts the request)
+		ctx, stop := requestContext(cmd.Context())
+		defer stop()
+		summary, err := llmProvider.Chat(ctx, summarizationPrompt)
 		if err != nil {
 			return fmt.Errorf("generating summary: %w", err)
 		}
@@ -626,7 +621,7 @@ Examples:
 			}
 		} else {
 			// Resolve model alias before pinning the model to the session
-			if err := resolveModelAlias(cfg); err != nil {
+			if err := resolveModelAlias(cmd.Context(), cfg); err != nil {
 				return err
 			}
 
@@ -676,9 +671,10 @@ func runInteractiveMode(sess *session.Session, llmProvider llmc.Provider) error 
 	fmt.Fprintf(os.Stderr, "===================================\n\n")
 
 	// Create readline instance with history
+	historyFile := getHistoryFilePath()
 	rl, err := readline.NewEx(&readline.Config{
 		Prompt:          "You> ",
-		HistoryFile:     getHistoryFilePath(),
+		HistoryFile:     historyFile,
 		InterruptPrompt: "^C",
 		EOFPrompt:       "exit",
 		Stderr:          os.Stderr,
@@ -687,6 +683,11 @@ func runInteractiveMode(sess *session.Session, llmProvider llmc.Provider) error 
 		return fmt.Errorf("creating readline instance: %w", err)
 	}
 	defer func() { _ = rl.Close() }()
+
+	// The history can contain conversation content; keep it private
+	if historyFile != "" {
+		_ = os.Chmod(historyFile, 0600)
+	}
 
 	for {
 		// Read input (with backslash continuation support)
@@ -752,8 +753,11 @@ func runInteractiveMode(sess *session.Session, llmProvider llmc.Provider) error 
 		done := make(chan bool)
 		go showSpinner(done)
 
-		// Send message with history
-		response, err := llmProvider.ChatWithHistory(sess.SystemPrompt, historyMessages, input)
+		// Send message with history; Ctrl+C aborts only this request and
+		// returns to the prompt
+		ctx, stop := requestContext(context.Background())
+		response, err := llmProvider.ChatWithHistory(ctx, sess.SystemPrompt, historyMessages, input)
+		stop()
 
 		// Stop spinner
 		done <- true

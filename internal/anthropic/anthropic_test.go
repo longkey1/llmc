@@ -1,6 +1,7 @@
 package anthropic
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -56,7 +57,7 @@ func TestChat(t *testing.T) {
 	defer server.Close()
 
 	p := newTestProvider(server.URL)
-	got, err := p.Chat("hello")
+	got, err := p.Chat(context.Background(), "hello")
 	if err != nil {
 		t.Fatalf("Chat() unexpected error: %v", err)
 	}
@@ -104,7 +105,7 @@ func TestChatJoinsMultipleTextBlocks(t *testing.T) {
 	defer server.Close()
 
 	p := newTestProvider(server.URL)
-	got, err := p.Chat("hello")
+	got, err := p.Chat(context.Background(), "hello")
 	if err != nil {
 		t.Fatalf("Chat() unexpected error: %v", err)
 	}
@@ -117,10 +118,10 @@ func TestChatWebSearchUnsupported(t *testing.T) {
 	p := newTestProvider("http://unused.invalid")
 	p.SetWebSearch(true)
 
-	if _, err := p.Chat("hello"); err == nil {
+	if _, err := p.Chat(context.Background(), "hello"); err == nil {
 		t.Error("Chat() expected error when web search enabled, got nil")
 	}
-	if _, err := p.ChatWithHistory("", nil, "hello"); err == nil {
+	if _, err := p.ChatWithHistory(context.Background(), "", nil, "hello"); err == nil {
 		t.Error("ChatWithHistory() expected error when web search enabled, got nil")
 	}
 }
@@ -181,7 +182,7 @@ func TestChatErrors(t *testing.T) {
 			defer server.Close()
 
 			p := newTestProvider(server.URL)
-			_, err := p.Chat("hello")
+			_, err := p.Chat(context.Background(), "hello")
 			if err == nil {
 				t.Fatal("Chat() expected error, got nil")
 			}
@@ -216,7 +217,7 @@ func TestChatWithHistory(t *testing.T) {
 		{Role: "assistant", Content: "first answer"},
 	}
 
-	got, err := p.ChatWithHistory("be helpful", history, "second question")
+	got, err := p.ChatWithHistory(context.Background(), "be helpful", history, "second question")
 	if err != nil {
 		t.Fatalf("ChatWithHistory() unexpected error: %v", err)
 	}
@@ -268,7 +269,7 @@ func TestListModels(t *testing.T) {
 	defer server.Close()
 
 	p := newTestProvider(server.URL)
-	models, err := p.ListModels()
+	models, err := p.ListModels(context.Background())
 	if err != nil {
 		t.Fatalf("ListModels() unexpected error: %v", err)
 	}

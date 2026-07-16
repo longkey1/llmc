@@ -1,12 +1,12 @@
-/*
-Copyright © 2025 NAME HERE <EMAIL ADDRESS>
-*/
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"os"
+	"os/signal"
 	"path/filepath"
+	"syscall"
 
 	"github.com/longkey1/llmc/internal/llmc/config"
 	"github.com/spf13/cobra"
@@ -37,6 +37,23 @@ func Execute() {
 	if err != nil {
 		os.Exit(1)
 	}
+}
+
+// requestContext returns a context canceled by Ctrl+C (SIGINT) or SIGTERM so
+// an in-flight API request can be aborted. Call the returned stop function as
+// soon as the request finishes to restore default signal handling.
+func requestContext(parent context.Context) (context.Context, context.CancelFunc) {
+	return signal.NotifyContext(parent, os.Interrupt, syscall.SIGTERM)
+}
+
+// stdinIsTerminal reports whether stdin is attached to a terminal. When it is
+// not (e.g., piped input), interactive confirmations cannot be answered.
+func stdinIsTerminal() bool {
+	fi, err := os.Stdin.Stat()
+	if err != nil {
+		return false
+	}
+	return fi.Mode()&os.ModeCharDevice != 0
 }
 
 func init() {
@@ -97,6 +114,9 @@ func initConfig() {
 	if cfgFile != "" {
 		// Use config file from the flag.
 		viper.SetConfigFile(cfgFile)
+		if err := viper.ReadInConfig(); err != nil {
+			fmt.Fprintf(os.Stderr, "Error reading config file: %v\n", err)
+		}
 	} else {
 		// Load system-wide config first (lower priority)
 		systemConfigPaths := []string{

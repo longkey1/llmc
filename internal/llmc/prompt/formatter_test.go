@@ -102,7 +102,8 @@ model = "@sonnet"
 		promptName    string
 		promptDirs    []string
 		args          []string
-		want          string
+		wantSystem    string
+		wantUser      string
 		wantModel     string
 		wantWebSearch *bool
 		wantErr       bool
@@ -111,7 +112,8 @@ model = "@sonnet"
 			name:       "no prompt returns message as-is",
 			message:    "hello",
 			promptName: "",
-			want:       "hello",
+			wantSystem: "",
+			wantUser:   "hello",
 		},
 		{
 			name:       "placeholder replacement with args",
@@ -119,7 +121,8 @@ model = "@sonnet"
 			promptName: "translate",
 			promptDirs: []string{dir},
 			args:       []string{"lang:Japanese"},
-			want:       "System: You translate to Japanese.\n\nUser: Text: hello world",
+			wantSystem: "You translate to Japanese.",
+			wantUser:   "Text: hello world",
 		},
 		{
 			name:       "explicit toml extension",
@@ -127,14 +130,16 @@ model = "@sonnet"
 			promptName: "translate.toml",
 			promptDirs: []string{dir},
 			args:       []string{"lang:French"},
-			want:       "System: You translate to French.\n\nUser: Text: hi",
+			wantSystem: "You translate to French.",
+			wantUser:   "Text: hi",
 		},
 		{
 			name:       "model and web search from prompt",
 			message:    "msg",
 			promptName: "with-model",
 			promptDirs: []string{dir},
-			want:       "System: sys\n\nUser: usr msg",
+			wantSystem: "sys",
+			wantUser:   "usr msg",
 			wantModel:  "gemini:gemini-2.0-flash",
 		},
 		{
@@ -156,7 +161,8 @@ model = "@sonnet"
 			message:    "msg",
 			promptName: "alias-model",
 			promptDirs: []string{dir},
-			want:       "System: sys\n\nUser: usr msg",
+			wantSystem: "sys",
+			wantUser:   "usr msg",
 			wantModel:  "@sonnet",
 		},
 		{
@@ -179,15 +185,18 @@ model = "@sonnet"
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, model, webSearch, err := FormatMessage(tt.message, tt.promptName, tt.promptDirs, tt.args)
+			system, user, model, webSearch, err := FormatMessage(tt.message, tt.promptName, tt.promptDirs, tt.args)
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("FormatMessage() error = %v, wantErr %v", err, tt.wantErr)
 			}
 			if tt.wantErr {
 				return
 			}
-			if got != tt.want {
-				t.Errorf("FormatMessage() = %q, want %q", got, tt.want)
+			if system != tt.wantSystem {
+				t.Errorf("FormatMessage() system = %q, want %q", system, tt.wantSystem)
+			}
+			if user != tt.wantUser {
+				t.Errorf("FormatMessage() user = %q, want %q", user, tt.wantUser)
 			}
 			if tt.wantModel == "" {
 				if model != nil {
@@ -215,12 +224,12 @@ system = "from dir2"
 user = "{{input}}"
 `)
 
-	got, _, _, err := FormatMessage("msg", "dup", []string{dir1, dir2}, nil)
+	system, _, _, _, err := FormatMessage("msg", "dup", []string{dir1, dir2}, nil)
 	if err != nil {
 		t.Fatalf("FormatMessage() unexpected error: %v", err)
 	}
-	if !strings.Contains(got, "from dir2") {
-		t.Errorf("FormatMessage() = %q, want prompt from later directory (dir2)", got)
+	if !strings.Contains(system, "from dir2") {
+		t.Errorf("FormatMessage() system = %q, want prompt from later directory (dir2)", system)
 	}
 }
 

@@ -2,6 +2,7 @@ package prompt
 
 import (
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"strings"
@@ -9,11 +10,16 @@ import (
 	"github.com/longkey1/llmc/internal/llmc"
 )
 
-// FormatMessage formats the message with prompt if specified
-// Returns the formatted message, the model specified in the prompt file (if any), and web search setting (if any)
-func FormatMessage(message string, promptName string, promptDirs []string, args []string) (string, *string, *bool, error) {
+// FormatMessage renders the message with the named prompt template.
+// It returns the rendered system and user prompts separately, plus the model
+// and web search settings from the template (if any). Returning them
+// separately (instead of a combined string) lets callers pass the system
+// prompt through the provider API's dedicated system field without fragile
+// re-parsing. With no template, system is empty and user is the message
+// unchanged.
+func FormatMessage(message string, promptName string, promptDirs []string, args []string) (system, user string, model *string, webSearch *bool, err error) {
 	if promptName == "" {
-		return message, nil, nil, nil
+		return "", message, nil, nil, nil
 	}
 
 	// Add .toml extension if not present
@@ -36,27 +42,25 @@ func FormatMessage(message string, promptName string, promptDirs []string, args 
 	}
 
 	if !found {
-		return "", nil, nil, fmt.Errorf("prompt file '%s' not found in any of the prompt directories: %v", promptFile, promptDirs)
+		return "", "", nil, nil, fmt.Errorf("prompt file '%s' not found in any of the prompt directories: %v", promptFile, promptDirs)
 	}
 
 	// Load prompt template
 	promptTemplate, err := LoadPrompt(promptPath)
 	if err != nil {
-		return "", nil, nil, fmt.Errorf("error loading prompt file: %v", err)
+		return "", "", nil, nil, fmt.Errorf("error loading prompt file: %v", err)
 	}
 
 	// Process command line arguments
 	argMap, err := processArgs(args)
 	if err != nil {
-		return "", nil, nil, fmt.Errorf("error processing arguments: %v", err)
+		return "", "", nil, nil, fmt.Errorf("error processing arguments: %v", err)
 	}
 
 	// Create a map of all replacements
 	replacements := make(map[string]string)
 	replacements["input"] = message
-	for key, value := range argMap {
-		replacements[key] = value
-	}
+	maps.Copy(replacements, argMap)
 
 	// Format both prompts with all replacements
 	systemPrompt := promptTemplate.System
@@ -72,11 +76,11 @@ func FormatMessage(message string, promptName string, promptDirs []string, args 
 	// validated by the caller against the config-defined alias map.
 	if promptTemplate.Model != nil && !llmc.IsModelAlias(*promptTemplate.Model) {
 		if _, _, err := llmc.ParseModelString(*promptTemplate.Model); err != nil {
-			return "", nil, nil, fmt.Errorf("invalid model format in prompt template: %w", err)
+			return "", "", nil, nil, fmt.Errorf("invalid model format in prompt template: %w", err)
 		}
 	}
 
-	return fmt.Sprintf("System: %s\n\nUser: %s", systemPrompt, userPrompt), promptTemplate.Model, promptTemplate.WebSearch, nil
+	return systemPrompt, userPrompt, promptTemplate.Model, promptTemplate.WebSearch, nil
 }
 
 // processArgs processes the command line arguments and returns a map of key-value pairs

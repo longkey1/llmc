@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"sort"
@@ -74,7 +75,7 @@ func expandModelAlias(cfg *config.Config, s string) (string, error) {
 // Non-alias models are left untouched, and alias values without wildcards are
 // used as-is — neither case calls the provider API. An undefined alias is an
 // error, as is a wildcard that cannot be resolved.
-func resolveModelAlias(cfg *config.Config) error {
+func resolveModelAlias(ctx context.Context, cfg *config.Config) error {
 	if !llmc.IsModelAlias(cfg.Model) {
 		return nil
 	}
@@ -104,7 +105,7 @@ func resolveModelAlias(cfg *config.Config) error {
 	}
 	p.SetDebug(verbose)
 
-	models, err := p.ListModels()
+	models, err := p.ListModels(ctx)
 	if err != nil {
 		return fmt.Errorf("listing models to resolve alias %q (%s): %w", input, expanded, err)
 	}

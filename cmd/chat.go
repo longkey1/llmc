@@ -1,6 +1,3 @@
-/*
-Copyright © 2025 NAME HERE <EMAIL ADDRESS>
-*/
 package cmd
 
 import (
@@ -88,6 +85,7 @@ web_search = true  # Optional: enables web search for this prompt"`,
 		var sess *session.Session
 		var systemPrompt string
 		var isNewSession bool
+		var promptWebSearch *bool
 
 		if sessionID != "" {
 			// Load existing session
@@ -96,26 +94,13 @@ web_search = true  # Optional: enables web search for this prompt"`,
 				return fmt.Errorf("finding session: %w", err)
 			}
 
-			// Check message threshold
-			threshold := cfg.SessionMessageThreshold
-			if threshold > 0 && sess.MessageCount() >= threshold && !ignoreThreshold {
-				fmt.Fprintf(os.Stderr, "\nWarning: Session %s has %d messages (threshold: %d).\n",
-					sess.GetShortID(), sess.MessageCount(), threshold)
-				fmt.Fprintf(os.Stderr, "Long sessions may impact performance and token usage.\n")
-				fmt.Fprintf(os.Stderr, "\nOptions:\n")
-				fmt.Fprintf(os.Stderr, "  1. Continue anyway with --ignore-threshold flag\n")
-				fmt.Fprintf(os.Stderr, "  2. Summarize session: llmc sessions summarize %s\n", sess.GetShortID())
-				fmt.Fprintf(os.Stderr, "  3. Start a new session: llmc chat --new-session\n\n")
-
-				// Ask for confirmation
-				fmt.Fprint(os.Stderr, "Continue with this session? [y/N]: ")
-				var response string
-				_, _ = fmt.Scanln(&response)
-
-				if response != "y" && response != "Y" {
-					fmt.Fprintln(os.Stderr, "Cancelled.")
-					return nil
-				}
+			proceed, err := confirmMessageThreshold(cfg, sess)
+			if err != nil {
+				return err
+			}
+			if !proceed {
+				fmt.Fprintln(os.Stderr, "Cancelled.")
+				return nil
 			}
 
 			// Use session's system prompt and model
@@ -129,135 +114,39 @@ web_search = true  # Optional: enables web search for this prompt"`,
 					fmt.Fprintf(os.Stderr, "System prompt: %s\n", systemPrompt)
 				}
 			}
-		} else if newSession {
-			// Create new session
-			isNewSession = true
-
-			// Format message with prompt if specified
-			var formattedMessage string
-			var promptModel *string
-			var promptWebSearch *bool
-			if prompt != "" {
-				formattedMessage, promptModel, promptWebSearch, err = promptpkg.FormatMessage(message, prompt, cfg.PromptDirs, argFlags)
-				if err != nil {
-					return fmt.Errorf("formatting message with prompt: %w", err)
-				}
-
-				// Extract system prompt from formatted message
-				if strings.HasPrefix(formattedMessage, "System: ") {
-					parts := strings.SplitN(formattedMessage, "\n\nUser: ", 2)
-					if len(parts) == 2 {
-						systemPrompt = strings.TrimPrefix(parts[0], "System: ")
-						message = parts[1] // Use formatted user message
-					}
-				}
-
-				// Apply model from prompt template
-				if promptModel != nil {
-					if err := validateModelOrAlias(*promptModel); err != nil {
-						return fmt.Errorf("invalid model from prompt file: %w", err)
-					}
-					cfg.Model = *promptModel
-					if verbose {
-						fmt.Fprintf(os.Stderr, "Using model from prompt file: %s\n", cfg.Model)
-					}
-				}
-
-				// Apply web search from prompt template
-				if promptWebSearch != nil && !cmd.Flags().Changed("web-search") {
-					cfg.EnableWebSearch = *promptWebSearch
-				}
-			}
-
-			// Apply model with priority: flag > env > prompt template > config file
-			envModel := os.Getenv("LLMC_MODEL")
-			if cmd.Flags().Changed("model") {
-				if err := validateModelOrAlias(model); err != nil {
-					return fmt.Errorf("invalid model from flag: %w", err)
-				}
-				cfg.Model = model
-			} else if envModel != "" {
-				if err := validateModelOrAlias(envModel); err != nil {
-					return fmt.Errorf("invalid model from environment: %w", err)
-				}
-				cfg.Model = envModel
-			}
-
-			// Resolve model alias before pinning the model to the session
-			if err := resolveModelAlias(cfg); err != nil {
-				return err
-			}
-
-			// Create new session
-			sess = session.NewSession(cfg.Model)
-			sess.Name = sessionName
-			sess.TemplateName = prompt
-			sess.SystemPrompt = systemPrompt
-
-			if verbose {
-				fmt.Fprintf(os.Stderr, "Creating new session: %s\n", sess.GetShortID())
-				fmt.Fprintf(os.Stderr, "Model: %s\n", sess.Model)
-				if systemPrompt != "" {
-					fmt.Fprintf(os.Stderr, "System prompt: %s\n", systemPrompt)
-				}
-			}
 		} else {
-			// Single-shot mode (no session)
-			formattedMessage, promptModel, promptWebSearch, err := promptpkg.FormatMessage(message, prompt, cfg.PromptDirs, argFlags)
+			// Single-shot or new-session mode: render the prompt template
+			var promptModel *string
+			systemPrompt, message, promptModel, promptWebSearch, err = promptpkg.FormatMessage(message, prompt, cfg.PromptDirs, argFlags)
 			if err != nil {
 				return fmt.Errorf("formatting message with prompt: %w", err)
 			}
 
-			// Apply model priority
-			envModel := os.Getenv("LLMC_MODEL")
-			if cmd.Flags().Changed("model") {
-				if err := validateModelOrAlias(model); err != nil {
-					return fmt.Errorf("invalid model from flag: %w", err)
-				}
-				cfg.Model = model
-			} else if envModel != "" {
-				if err := validateModelOrAlias(envModel); err != nil {
-					return fmt.Errorf("invalid model from environment: %w", err)
-				}
-				cfg.Model = envModel
-			} else if promptModel != nil {
-				if err := validateModelOrAlias(*promptModel); err != nil {
-					return fmt.Errorf("invalid model from prompt file: %w", err)
-				}
-				cfg.Model = *promptModel
-			}
-
-			// Resolve model alias to a concrete model
-			if err := resolveModelAlias(cfg); err != nil {
+			if err := applyModelOverride(cmd, cfg, promptModel); err != nil {
 				return err
 			}
 
-			// Select provider
-			llmProvider, err := newProvider(cfg)
-			if err != nil {
-				return fmt.Errorf("creating provider: %w", err)
+			// Resolve model alias to a concrete model (for a new session,
+			// this happens before the model is pinned to the session)
+			if err := resolveModelAlias(cmd.Context(), cfg); err != nil {
+				return err
 			}
 
-			// Configure web search
-			enableWebSearch := cfg.EnableWebSearch
-			envWebSearch := os.Getenv("LLMC_ENABLE_WEB_SEARCH")
-			if cmd.Flags().Changed("web-search") {
-				enableWebSearch = webSearch
-			} else if envWebSearch != "" {
-				enableWebSearch = envWebSearch == "true" || envWebSearch == "1"
-			} else if promptWebSearch != nil {
-				enableWebSearch = *promptWebSearch
-			}
-			llmProvider.SetWebSearch(enableWebSearch)
-			llmProvider.SetDebug(verbose)
+			if newSession {
+				isNewSession = true
+				sess = session.NewSession(cfg.Model)
+				sess.Name = sessionName
+				sess.TemplateName = prompt
+				sess.SystemPrompt = systemPrompt
 
-			// Send message and print response
-			response, err := llmProvider.Chat(formattedMessage)
-			if err != nil {
-				return fmt.Errorf("chat request failed: %w", err)
+				if verbose {
+					fmt.Fprintf(os.Stderr, "Creating new session: %s\n", sess.GetShortID())
+					fmt.Fprintf(os.Stderr, "Model: %s\n", sess.Model)
+					if systemPrompt != "" {
+						fmt.Fprintf(os.Stderr, "System prompt: %s\n", systemPrompt)
+					}
+				}
 			}
-			fmt.Println(response)
-			return nil
 		}
 
 		// Select provider
@@ -265,17 +154,22 @@ web_search = true  # Optional: enables web search for this prompt"`,
 		if err != nil {
 			return fmt.Errorf("creating provider: %w", err)
 		}
-
-		// Configure web search
-		enableWebSearch := cfg.EnableWebSearch
-		envWebSearch := os.Getenv("LLMC_ENABLE_WEB_SEARCH")
-		if cmd.Flags().Changed("web-search") {
-			enableWebSearch = webSearch
-		} else if envWebSearch != "" {
-			enableWebSearch = envWebSearch == "true" || envWebSearch == "1"
-		}
-		llmProvider.SetWebSearch(enableWebSearch)
+		llmProvider.SetWebSearch(resolveWebSearch(cmd, cfg, promptWebSearch))
 		llmProvider.SetDebug(verbose)
+
+		// Allow Ctrl+C to abort the in-flight request
+		ctx, stop := requestContext(cmd.Context())
+		defer stop()
+
+		// Single-shot mode (no session)
+		if sess == nil {
+			response, err := llmProvider.ChatWithHistory(ctx, systemPrompt, nil, message)
+			if err != nil {
+				return fmt.Errorf("chat request failed: %w", err)
+			}
+			fmt.Println(response)
+			return nil
+		}
 
 		// Session mode: add message to session
 		sess.AddMessage("user", message)
@@ -283,8 +177,7 @@ web_search = true  # Optional: enables web search for this prompt"`,
 		// Send message with history (exclude the last message which was just added)
 		historyMessages := sess.Messages[:len(sess.Messages)-1]
 
-		response, err := llmProvider.ChatWithHistory(sess.SystemPrompt, historyMessages, message)
-
+		response, err := llmProvider.ChatWithHistory(ctx, sess.SystemPrompt, historyMessages, message)
 		if err != nil {
 			return fmt.Errorf("chat request failed: %w", err)
 		}
@@ -311,6 +204,75 @@ web_search = true  # Optional: enables web search for this prompt"`,
 
 		return nil
 	},
+}
+
+// applyModelOverride applies the model priority (flag > environment > prompt
+// template > config file) to cfg.Model, validating the chosen source.
+func applyModelOverride(cmd *cobra.Command, cfg *config.Config, promptModel *string) error {
+	envModel := os.Getenv("LLMC_MODEL")
+	switch {
+	case cmd.Flags().Changed("model"):
+		if err := validateModelOrAlias(model); err != nil {
+			return fmt.Errorf("invalid model from flag: %w", err)
+		}
+		cfg.Model = model
+	case envModel != "":
+		if err := validateModelOrAlias(envModel); err != nil {
+			return fmt.Errorf("invalid model from environment: %w", err)
+		}
+		cfg.Model = envModel
+	case promptModel != nil:
+		if err := validateModelOrAlias(*promptModel); err != nil {
+			return fmt.Errorf("invalid model from prompt file: %w", err)
+		}
+		cfg.Model = *promptModel
+	}
+	return nil
+}
+
+// resolveWebSearch returns the effective web search setting, applying the
+// flag > environment > prompt template > config file priority.
+func resolveWebSearch(cmd *cobra.Command, cfg *config.Config, promptWebSearch *bool) bool {
+	if cmd.Flags().Changed("web-search") {
+		return webSearch
+	}
+	if envWebSearch := os.Getenv("LLMC_ENABLE_WEB_SEARCH"); envWebSearch != "" {
+		return envWebSearch == "true" || envWebSearch == "1"
+	}
+	if promptWebSearch != nil {
+		return *promptWebSearch
+	}
+	return cfg.EnableWebSearch
+}
+
+// confirmMessageThreshold warns when a session exceeds the configured message
+// threshold and asks the user whether to continue. It returns false when the
+// user declines. When stdin is not a terminal (e.g., the message was piped
+// in), the confirmation cannot be answered, so an error asking for
+// --ignore-threshold is returned instead.
+func confirmMessageThreshold(cfg *config.Config, sess *session.Session) (bool, error) {
+	threshold := cfg.SessionMessageThreshold
+	if threshold <= 0 || sess.MessageCount() < threshold || ignoreThreshold {
+		return true, nil
+	}
+
+	fmt.Fprintf(os.Stderr, "\nWarning: Session %s has %d messages (threshold: %d).\n",
+		sess.GetShortID(), sess.MessageCount(), threshold)
+	fmt.Fprintf(os.Stderr, "Long sessions may impact performance and token usage.\n")
+	fmt.Fprintf(os.Stderr, "\nOptions:\n")
+	fmt.Fprintf(os.Stderr, "  1. Continue anyway with --ignore-threshold flag\n")
+	fmt.Fprintf(os.Stderr, "  2. Summarize session: llmc sessions summarize %s\n", sess.GetShortID())
+	fmt.Fprintf(os.Stderr, "  3. Start a new session: llmc chat --new-session\n\n")
+
+	if !stdinIsTerminal() {
+		return false, fmt.Errorf("session %s exceeds the message threshold; re-run with --ignore-threshold to continue", sess.GetShortID())
+	}
+
+	fmt.Fprint(os.Stderr, "Continue with this session? [y/N]: ")
+	var response string
+	_, _ = fmt.Scanln(&response)
+
+	return response == "y" || response == "Y", nil
 }
 
 // getMessageFromEditor opens the default editor and returns the edited message
