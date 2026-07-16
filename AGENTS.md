@@ -70,5 +70,5 @@ Cobraベース。`root.go` が共通フラグと設定読み込み、`chat.go`/`
 - `github.com/spf13/cobra` - CLIフレームワーク
 - `github.com/spf13/viper` - 設定管理
 - `github.com/BurntSushi/toml` - TOMLパーサー
-- `github.com/chzyer/readline` - 対話モードの行編集/履歴
+- `github.com/knz/bubbline` - 対話モードのマルチライン行編集/履歴/外部エディタ起動 (bubbletea ベース)
 - `github.com/google/uuid` - セッションID生成

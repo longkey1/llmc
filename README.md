@@ -123,10 +123,11 @@ llmc sessions start latest
 
 Interactive mode features:
 - **`You>` prompt**: Type your messages naturally
+- **Multiline editing**: The input area grows vertically; insert newlines with `Ctrl+J`
+- **External editor**: Compose long messages in `$EDITOR` with `Ctrl+G`
 - **Spinner animation**: Shows "Waiting for response..." while processing
 - **Auto-save**: Session is saved after each turn
 - **Input history**: Command history persisted across sessions (stored in `~/.config/llmc/history`)
-- **Line editing**: Full readline support with cursor movement and editing
 - **Special commands**:
   - `/help` or `/h` - Show available commands
   - `/info` or `/i` - Display session information
@@ -136,31 +137,35 @@ Interactive mode features:
 
 #### Input Editing Keybindings
 
-LLMC interactive mode supports standard readline keybindings for text editing:
+**Sending and Newlines:**
+- `Enter` - Send message
+- `Ctrl+J` (or `Ctrl+O`) - Insert newline
+- `\` at end of line + `Enter` - Insert newline (continuation)
+- `Alt+Enter` - Force send (ignores continuation)
+
+**External Editor:**
+- `Ctrl+G` - Edit the current input in `$EDITOR`; the saved content is placed back into the prompt
 
 **Cursor Movement:**
-- `←` / `→` - Move cursor left/right
+- `←` / `→` / `↑` / `↓` - Move cursor (also across lines in multiline input)
 - `Ctrl+A` - Move to beginning of line
 - `Ctrl+E` - Move to end of line
-- `Ctrl+B` - Move backward one character (same as ←)
-- `Ctrl+F` - Move forward one character (same as →)
 
 **Editing:**
-- `Backspace` / `Ctrl+H` - Delete character before cursor
-- `Delete` / `Ctrl+D` - Delete character at cursor (exits if line is empty)
+- `Backspace` - Delete character before cursor
+- `Delete` / `Ctrl+D` - Delete character at cursor (exits on an empty line)
 - `Ctrl+W` - Delete word before cursor
 - `Ctrl+U` - Delete from cursor to beginning of line
 - `Ctrl+K` - Delete from cursor to end of line
 
 **History:**
-- `↑` / `↓` - Navigate command history
-- `Ctrl+P` - Previous command (same as ↑)
-- `Ctrl+N` - Next command (same as ↓)
-- `Ctrl+R` - Search command history
+- `↑` on the first line / `Alt+P` - Previous history entry
+- `↓` on the last line / `Alt+N` - Next history entry
+- `Ctrl+R` - Search history
 
 **Other:**
 - `Ctrl+C` - Clear current input (exits if input is empty)
-- `Ctrl+D` - Exit interactive mode (when line is empty)
+- `Ctrl+D` - Exit interactive mode (when the current line is empty)
 
 Example interactive session:
 ```
@@ -761,9 +766,9 @@ Sessions are stored as JSON files:
 #### Interactive Mode History
 
 Interactive mode command history is persisted to disk:
-- History file: `$HOME/.config/llmc/history`
+- History file: `$HOME/.config/llmc/history` (plain text, one entry per line; multiline input is flattened to a single line)
 - History is shared across all interactive sessions
-- Arrow keys (↑/↓) navigate through history
+- `↑` on the first line, `↓` on the last line, `Alt+P`/`Alt+N`, and `Ctrl+R` navigate through history
 
 ### Prompt Template Format
 

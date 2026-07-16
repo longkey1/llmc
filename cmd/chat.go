@@ -163,7 +163,9 @@ web_search = true  # Optional: enables web search for this prompt"`,
 
 		// Single-shot mode (no session)
 		if sess == nil {
+			stopSpinner := startSpinner()
 			response, err := llmProvider.ChatWithHistory(ctx, systemPrompt, nil, message)
+			stopSpinner()
 			if err != nil {
 				return fmt.Errorf("chat request failed: %w", err)
 			}
@@ -177,7 +179,9 @@ web_search = true  # Optional: enables web search for this prompt"`,
 		// Send message with history (exclude the last message which was just added)
 		historyMessages := sess.Messages[:len(sess.Messages)-1]
 
+		stopSpinner := startSpinner()
 		response, err := llmProvider.ChatWithHistory(ctx, sess.SystemPrompt, historyMessages, message)
+		stopSpinner()
 		if err != nil {
 			return fmt.Errorf("chat request failed: %w", err)
 		}

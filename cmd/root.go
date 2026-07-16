@@ -56,6 +56,17 @@ func stdinIsTerminal() bool {
 	return fi.Mode()&os.ModeCharDevice != 0
 }
 
+// stderrIsTerminal reports whether stderr is attached to a terminal. When it
+// is not (e.g., redirected to a file), progress animations would leave
+// control sequences in the output.
+func stderrIsTerminal() bool {
+	fi, err := os.Stderr.Stat()
+	if err != nil {
+		return false
+	}
+	return fi.Mode()&os.ModeCharDevice != 0
+}
+
 func init() {
 	cobra.OnInitialize(initConfig)
 

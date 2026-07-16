@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -9,7 +10,8 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"github.com/chzyer/readline"
+	"github.com/charmbracelet/bubbles/key"
+	"github.com/knz/bubbline"
 	"github.com/longkey1/llmc/internal/llmc"
 	"github.com/longkey1/llmc/internal/llmc/config"
 	"github.com/longkey1/llmc/internal/llmc/session"
@@ -670,67 +672,61 @@ func runInteractiveMode(sess *session.Session, llmProvider llmc.Provider) error 
 	fmt.Fprintf(os.Stderr, "Type '/help' for commands, '/exit' or 'Ctrl+D' to quit\n")
 	fmt.Fprintf(os.Stderr, "===================================\n\n")
 
-	// Create readline instance with history
+	// Create multiline editor with history
 	historyFile := getHistoryFilePath()
-	rl, err := readline.NewEx(&readline.Config{
-		Prompt:          "You> ",
-		HistoryFile:     historyFile,
-		InterruptPrompt: "^C",
-		EOFPrompt:       "exit",
-		Stderr:          os.Stderr,
-	})
-	if err != nil {
-		return fmt.Errorf("creating readline instance: %w", err)
-	}
-	defer func() { _ = rl.Close() }()
 
 	// The history can contain conversation content; keep it private
 	if historyFile != "" {
 		_ = os.Chmod(historyFile, 0600)
 	}
 
+	m := bubbline.New()
+	defer m.Close()
+
+	m.Prompt = "You> "
+	m.NextPrompt = "...> "
+	// Enter submits the input. Pressing Enter in the middle of the buffer or
+	// on a line ending with a backslash inserts a newline instead.
+	m.CheckInputComplete = func(v [][]rune, line, _ int) bool {
+		return line == len(v)-1 && !strings.HasSuffix(string(v[len(v)-1]), `\`)
+	}
+	m.KeyMap.AlwaysNewline = key.NewBinding(
+		key.WithKeys("ctrl+j", "ctrl+o"), key.WithHelp("C-j", "new line"))
+	m.KeyMap.ExternalEdit = key.NewBinding(
+		key.WithKeys("ctrl+g"), key.WithHelp("C-g", "editor"))
+	// Must be called after the ExternalEdit binding is assigned: New()
+	// disables the binding via SetExternalEditorEnabled(false, "")
+	m.SetExternalEditorEnabled(true, "txt")
+	if historyFile != "" {
+		m.SetHistory(loadPlainHistory(historyFile))
+	}
+
 	for {
-		// Read input (with backslash continuation support)
-		var inputLines []string
-		rl.SetPrompt("You> ")
-		for {
-			line, err := rl.Readline()
-			if err != nil {
-				if err == readline.ErrInterrupt {
-					if len(line) == 0 && len(inputLines) == 0 {
-						fmt.Fprintln(os.Stderr, "\nGoodbye!")
-						return nil
-					}
-					// Cancel current input
-					inputLines = nil
-					rl.SetPrompt("You> ")
-					break
-				} else if err == io.EOF {
-					fmt.Fprintln(os.Stderr, "\nGoodbye!")
-					return nil
-				}
-				return fmt.Errorf("input error: %w", err)
+		val, err := m.GetLine()
+		if err != nil {
+			if err == io.EOF || errors.Is(err, bubbline.ErrInterrupted) {
+				// Ctrl+D, Ctrl+C on empty input, or SIGINT
+				fmt.Fprintln(os.Stderr, "\nGoodbye!")
+				return nil
 			}
-
-			if strings.HasSuffix(line, `\`) {
-				// Backslash continuation: strip trailing backslash and continue
-				inputLines = append(inputLines, strings.TrimSuffix(line, `\`))
-				rl.SetPrompt("...> ")
-				continue
+			if errors.Is(err, bubbline.ErrTerminated) {
+				return nil
 			}
-			inputLines = append(inputLines, line)
-			break
+			return fmt.Errorf("input error: %w", err)
 		}
 
-		if len(inputLines) == 0 {
-			continue
-		}
-
-		input := strings.TrimSpace(strings.Join(inputLines, "\n"))
+		// Backslash continuations always produce a `\`+newline pair; strip
+		// the backslashes so the result matches the old readline behavior
+		input := strings.TrimSpace(strings.ReplaceAll(val, "\\\n", "\n"))
 
 		// Skip empty input
 		if input == "" {
 			continue
+		}
+
+		m.AddHistoryEntry(input)
+		if historyFile != "" {
+			appendPlainHistory(historyFile, input)
 		}
 
 		// Handle special commands
@@ -749,9 +745,7 @@ func runInteractiveMode(sess *session.Session, llmProvider llmc.Provider) error 
 		// Get conversation history (excluding the just-added message)
 		historyMessages := sess.Messages[:len(sess.Messages)-1]
 
-		// Start spinner
-		done := make(chan bool)
-		go showSpinner(done)
+		stopSpinner := startSpinner()
 
 		// Send message with history; Ctrl+C aborts only this request and
 		// returns to the prompt
@@ -759,9 +753,7 @@ func runInteractiveMode(sess *session.Session, llmProvider llmc.Provider) error 
 		response, err := llmProvider.ChatWithHistory(ctx, sess.SystemPrompt, historyMessages, input)
 		stop()
 
-		// Stop spinner
-		done <- true
-		close(done)
+		stopSpinner()
 
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
@@ -785,13 +777,57 @@ func runInteractiveMode(sess *session.Session, llmProvider llmc.Provider) error 
 	return nil
 }
 
-// getHistoryFilePath returns the path to the readline history file
+// getHistoryFilePath returns the path to the input history file
 func getHistoryFilePath() string {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		return ""
 	}
 	return homeDir + "/.config/llmc/history"
+}
+
+// loadPlainHistory reads the history file (plain text, one entry per line).
+// Errors are ignored; a missing or unreadable file just yields no history.
+func loadPlainHistory(path string) []string {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil
+	}
+	var entries []string
+	for line := range strings.SplitSeq(string(data), "\n") {
+		if line = strings.TrimSpace(line); line != "" {
+			entries = append(entries, line)
+		}
+	}
+	return entries
+}
+
+// appendPlainHistory appends an entry to the history file, keeping the
+// one-entry-per-line format: newlines in multiline input are flattened to
+// spaces. The file may contain conversation content, so it is kept private.
+func appendPlainHistory(path, entry string) {
+	flat := strings.ReplaceAll(entry, "\n", " ")
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
+	if err != nil {
+		return
+	}
+	defer func() { _ = f.Close() }()
+	_, _ = fmt.Fprintln(f, flat)
+}
+
+// startSpinner starts a spinner animation on stderr and returns a function
+// that stops it and clears the line. It is a no-op when stderr is not a
+// terminal (e.g., redirected to a file).
+func startSpinner() func() {
+	if !stderrIsTerminal() {
+		return func() {}
+	}
+	done := make(chan bool)
+	go showSpinner(done)
+	return func() {
+		done <- true
+		close(done)
+	}
 }
 
 // showSpinner displays a spinner animation while waiting for response
@@ -824,6 +860,13 @@ func handleSpecialCommand(command string, sess *session.Session) bool {
 		fmt.Fprintln(os.Stderr, "  /info, /i     - Show session information")
 		fmt.Fprintln(os.Stderr, "  /clear, /c    - Clear screen (Unix/Linux only)")
 		fmt.Fprintln(os.Stderr, "  /exit, /quit  - Exit interactive mode")
+		fmt.Fprintln(os.Stderr, "")
+		fmt.Fprintln(os.Stderr, "Key bindings:")
+		fmt.Fprintln(os.Stderr, "  Enter         - Send message")
+		fmt.Fprintln(os.Stderr, "  Ctrl+J        - Insert newline (also: line ending with '\\' + Enter)")
+		fmt.Fprintln(os.Stderr, "  Ctrl+G        - Compose message in $EDITOR")
+		fmt.Fprintln(os.Stderr, "  Alt+P / Alt+N - Previous / next history entry")
+		fmt.Fprintln(os.Stderr, "  Ctrl+R        - Search history")
 		fmt.Fprintln(os.Stderr, "  Ctrl+D        - Exit interactive mode")
 		fmt.Fprintln(os.Stderr, "")
 		return true
