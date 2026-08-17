@@ -110,6 +110,16 @@ func initConfig() {
 	viper.SetDefault("ollama_token", defaultConfig.OllamaToken)
 	viper.SetDefault("prompt_dirs", defaultPromptDirs)
 	viper.SetDefault("enable_web_search", defaultConfig.EnableWebSearch)
+	viper.SetDefault("enable_tools", defaultConfig.EnableTools)
+	viper.SetDefault("exec_allowed_commands", defaultConfig.ExecAllowedCommands)
+	viper.SetDefault("exec_denied_commands", defaultConfig.ExecDeniedCommands)
+	viper.SetDefault("exec_unlisted", defaultConfig.ExecUnlisted)
+	viper.SetDefault("exec_env_mode", defaultConfig.ExecEnvMode)
+	viper.SetDefault("exec_env_passthrough", defaultConfig.ExecEnvPassthrough)
+	viper.SetDefault("write_allowed_paths", defaultConfig.WriteAllowedPaths)
+	viper.SetDefault("write_denied_paths", defaultConfig.WriteDeniedPaths)
+	viper.SetDefault("write_unlisted", defaultConfig.WriteUnlisted)
+	viper.SetDefault("read_denied_paths", defaultConfig.ReadDeniedPaths)
 	viper.SetDefault("session_message_threshold", defaultConfig.SessionMessageThreshold)
 	viper.SetDefault("session_retention_days", defaultConfig.SessionRetentionDays)
 
@@ -122,6 +132,17 @@ func initConfig() {
 	_ = viper.BindEnv("anthropic_token", "LLMC_ANTHROPIC_TOKEN")
 	_ = viper.BindEnv("ollama_base_url", "LLMC_OLLAMA_BASE_URL")
 	_ = viper.BindEnv("ollama_token", "LLMC_OLLAMA_TOKEN")
+	_ = viper.BindEnv("enable_tools", "LLMC_ENABLE_TOOLS")
+	// exec_allowed_commands / exec_denied_commands are nested tables and
+	// cannot be expressed as a single environment variable; they are
+	// config-file only (like model_aliases).
+	_ = viper.BindEnv("exec_unlisted", "LLMC_EXEC_UNLISTED")
+	_ = viper.BindEnv("exec_env_mode", "LLMC_EXEC_ENV_MODE")
+	_ = viper.BindEnv("exec_env_passthrough", "LLMC_EXEC_ENV_PASSTHROUGH")
+	_ = viper.BindEnv("write_allowed_paths", "LLMC_WRITE_ALLOWED_PATHS")
+	_ = viper.BindEnv("write_denied_paths", "LLMC_WRITE_DENIED_PATHS")
+	_ = viper.BindEnv("write_unlisted", "LLMC_WRITE_UNLISTED")
+	_ = viper.BindEnv("read_denied_paths", "LLMC_READ_DENIED_PATHS")
 	_ = viper.BindEnv("session_message_threshold", "LLMC_SESSION_MESSAGE_THRESHOLD")
 	_ = viper.BindEnv("session_retention_days", "LLMC_SESSION_RETENTION_DAYS")
 
@@ -184,5 +205,7 @@ func initConfig() {
 		fmt.Fprintln(os.Stderr, "  LLMC_OLLAMA_BASE_URL:", viper.GetString("ollama_base_url"))
 		fmt.Fprintln(os.Stderr, "  LLMC_PROMPT_DIRS:", viper.GetStringSlice("prompt_dirs"))
 		fmt.Fprintln(os.Stderr, "  LLMC_ENABLE_WEB_SEARCH:", viper.GetBool("enable_web_search"))
+		fmt.Fprintln(os.Stderr, "  LLMC_ENABLE_TOOLS:", viper.GetBool("enable_tools"))
+		fmt.Fprintln(os.Stderr, "  LLMC_EXEC_ENV_MODE:", viper.GetString("exec_env_mode"))
 	}
 }

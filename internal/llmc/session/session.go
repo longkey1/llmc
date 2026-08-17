@@ -46,6 +46,13 @@ func (s *Session) AddMessage(role, content string) {
 	s.UpdatedAt = time.Now()
 }
 
+// AppendMessages appends pre-built messages (e.g. from a tool loop) to the
+// session, preserving their fields, and refreshes UpdatedAt.
+func (s *Session) AppendMessages(msgs ...llmc.Message) {
+	s.Messages = append(s.Messages, msgs...)
+	s.UpdatedAt = time.Now()
+}
+
 // GetShortID returns the shortened session ID (first 8 characters)
 func (s *Session) GetShortID() string {
 	if len(s.ID) >= 8 {

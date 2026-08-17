@@ -12,6 +12,7 @@ type Prompt struct {
 	User      string  `toml:"user"`
 	Model     *string `toml:"model,omitempty"`
 	WebSearch *bool   `toml:"web_search,omitempty"`
+	Tools     *bool   `toml:"tools,omitempty"`
 }
 
 // LoadPrompt loads a prompt file and returns its contents

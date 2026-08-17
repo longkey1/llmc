@@ -6,7 +6,9 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"time"
 
+	"github.com/longkey1/llmc/internal/llmc"
 	"github.com/longkey1/llmc/internal/llmc/config"
 	promptpkg "github.com/longkey1/llmc/internal/llmc/prompt"
 	"github.com/longkey1/llmc/internal/llmc/session"
@@ -20,6 +22,8 @@ var (
 	argFlags        []string
 	useEditor       bool
 	webSearch       bool
+	enableTools     bool
+	autoApproveTool bool
 	sessionID       string
 	newSession      bool
 	sessionName     string
@@ -45,7 +49,8 @@ The prompt file should be in TOML format with the following structure:
 system = "System prompt with optional {{input}} placeholder"
 user = "User prompt with optional {{input}} placeholder"
 model = "optional-model-name"  # Optional: overrides the default model for this prompt
-web_search = true  # Optional: enables web search for this prompt"`,
+web_search = true  # Optional: enables web search for this prompt
+tools = true  # Optional: enables built-in tools for this prompt"`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// Load configuration from file
 		cfg, err := config.LoadConfig()
@@ -85,7 +90,7 @@ web_search = true  # Optional: enables web search for this prompt"`,
 		var sess *session.Session
 		var systemPrompt string
 		var isNewSession bool
-		var promptWebSearch *bool
+		promptOpts := &promptpkg.TemplateOptions{Model: nil, WebSearch: nil, Tools: nil}
 
 		if sessionID != "" {
 			// Load existing session
@@ -116,13 +121,12 @@ web_search = true  # Optional: enables web search for this prompt"`,
 			}
 		} else {
 			// Single-shot or new-session mode: render the prompt template
-			var promptModel *string
-			systemPrompt, message, promptModel, promptWebSearch, err = promptpkg.FormatMessage(message, prompt, cfg.PromptDirs, argFlags)
+			systemPrompt, message, promptOpts, err = promptpkg.FormatMessage(message, prompt, cfg.PromptDirs, argFlags)
 			if err != nil {
 				return fmt.Errorf("formatting message with prompt: %w", err)
 			}
 
-			if err := applyModelOverride(cmd, cfg, promptModel); err != nil {
+			if err := applyModelOverride(cmd, cfg, promptOpts.Model); err != nil {
 				return err
 			}
 
@@ -154,7 +158,7 @@ web_search = true  # Optional: enables web search for this prompt"`,
 		if err != nil {
 			return fmt.Errorf("creating provider: %w", err)
 		}
-		llmProvider.SetWebSearch(resolveWebSearch(cmd, cfg, promptWebSearch))
+		llmProvider.SetWebSearch(resolveWebSearch(cmd, cfg, promptOpts.WebSearch))
 		llmProvider.SetDebug(verbose)
 
 		// Allow Ctrl+C to abort the in-flight request
@@ -163,9 +167,8 @@ web_search = true  # Optional: enables web search for this prompt"`,
 
 		// Single-shot mode (no session)
 		if sess == nil {
-			stopSpinner := startSpinner()
-			response, err := llmProvider.ChatWithHistory(ctx, systemPrompt, nil, message)
-			stopSpinner()
+			tc := newTurnConfig(cmd, cfg, systemPrompt, promptOpts.Tools)
+			response, _, err := runTurn(ctx, llmProvider, nil, message, tc)
 			if err != nil {
 				return fmt.Errorf("chat request failed: %w", err)
 			}
@@ -173,21 +176,17 @@ web_search = true  # Optional: enables web search for this prompt"`,
 			return nil
 		}
 
-		// Session mode: add message to session
-		sess.AddMessage("user", message)
-
-		// Send message with history (exclude the last message which was just added)
-		historyMessages := sess.Messages[:len(sess.Messages)-1]
-
-		stopSpinner := startSpinner()
-		response, err := llmProvider.ChatWithHistory(ctx, sess.SystemPrompt, historyMessages, message)
-		stopSpinner()
+		// Session mode: send the message with the existing history
+		userMsg := llmc.Message{Role: "user", Content: message, Timestamp: time.Now()}
+		tc := newTurnConfig(cmd, cfg, sess.SystemPrompt, promptOpts.Tools)
+		response, turnMessages, err := runTurn(ctx, llmProvider, sess.Messages, message, tc)
 		if err != nil {
 			return fmt.Errorf("chat request failed: %w", err)
 		}
 
-		// Add assistant response to session
-		sess.AddMessage("assistant", response)
+		// Persist the user message and everything the turn generated
+		sess.AppendMessages(userMsg)
+		sess.AppendMessages(turnMessages...)
 
 		// Save session
 		if err := session.SaveSession(sess); err != nil {
@@ -247,6 +246,21 @@ func resolveWebSearch(cmd *cobra.Command, cfg *config.Config, promptWebSearch *b
 		return *promptWebSearch
 	}
 	return cfg.EnableWebSearch
+}
+
+// resolveTools returns the effective tool-calling setting, applying the
+// flag > environment > prompt template > config file priority.
+func resolveTools(cmd *cobra.Command, cfg *config.Config, promptTools *bool) bool {
+	if cmd.Flags().Changed("tools") {
+		return enableTools
+	}
+	if envTools := os.Getenv("LLMC_ENABLE_TOOLS"); envTools != "" {
+		return envTools == "true" || envTools == "1"
+	}
+	if promptTools != nil {
+		return *promptTools
+	}
+	return cfg.EnableTools
 }
 
 // confirmMessageThreshold warns when a session exceeds the configured message
@@ -321,6 +335,8 @@ func init() {
 	chatCmd.Flags().StringArrayVar(&argFlags, "arg", []string{}, "Key-value pairs for prompt template (format: key:value)")
 	chatCmd.Flags().BoolVarP(&useEditor, "editor", "e", false, "Use default editor (from EDITOR environment variable) to compose message")
 	chatCmd.Flags().BoolVar(&webSearch, "web-search", false, "Enable web search for real-time information")
+	chatCmd.Flags().BoolVar(&enableTools, "tools", false, "Enable built-in tools (fetch_url, read_file, exec_command, write_file)")
+	chatCmd.Flags().BoolVar(&autoApproveTool, "yes", false, "Skip confirmation prompts for tool execution (exec_command, write_file)")
 
 	// Session flags
 	chatCmd.Flags().StringVarP(&sessionID, "session", "s", "", "Session ID (short or full UUID, or 'latest' for most recent session)")

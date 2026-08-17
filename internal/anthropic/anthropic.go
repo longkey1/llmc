@@ -39,6 +39,7 @@ type MessagesAPIRequest struct {
 	MaxTokens int            `json:"max_tokens"`
 	System    string         `json:"system,omitempty"` // System prompt (optional)
 	Messages  []MessageInput `json:"messages"`
+	Tools     []ToolSpec     `json:"tools,omitempty"`
 }
 
 // MessageInput represents a message in the conversation
@@ -51,6 +52,21 @@ type MessageInput struct {
 type Content struct {
 	Type string `json:"type"` // "text", "tool_use", "tool_result", etc.
 	Text string `json:"text,omitempty"`
+	// tool_use fields
+	ID    string          `json:"id,omitempty"`
+	Name  string          `json:"name,omitempty"`
+	Input json.RawMessage `json:"input,omitempty"`
+	// tool_result fields
+	ToolUseID     string `json:"tool_use_id,omitempty"`
+	ResultContent string `json:"content,omitempty"`
+	IsError       bool   `json:"is_error,omitempty"`
+}
+
+// ToolSpec represents a tool definition in the Messages API request
+type ToolSpec struct {
+	Name        string         `json:"name"`
+	Description string         `json:"description,omitempty"`
+	InputSchema map[string]any `json:"input_schema"`
 }
 
 // MessagesAPIResponse represents the response from Anthropic's Messages API
@@ -68,8 +84,12 @@ type MessagesAPIResponse struct {
 
 // ResponseContent represents a content block in the response
 type ResponseContent struct {
-	Type string `json:"type"` // "text"
+	Type string `json:"type"` // "text" or "tool_use"
 	Text string `json:"text,omitempty"`
+	// tool_use fields
+	ID    string          `json:"id,omitempty"`
+	Name  string          `json:"name,omitempty"`
+	Input json.RawMessage `json:"input,omitempty"`
 }
 
 // Usage represents token usage information
@@ -227,22 +247,157 @@ func (p *Provider) ChatWithHistory(ctx context.Context, systemPrompt string, mes
 	var result MessagesAPIResponse
 	body, err := llmc.DoJSON(ctx, http.MethodPost, url, headers, reqBody, &result, p.debug)
 	if err != nil {
-		// Anthropic error bodies carry a structured message; surface it when parseable
-		var statusErr *llmc.HTTPStatusError
-		if errors.As(err, &statusErr) {
-			var errResp MessagesAPIResponse
-			if json.Unmarshal(statusErr.Body, &errResp) == nil && errResp.Error != nil {
-				if p.debug {
-					return "", fmt.Errorf("API error [%s]: %s (HTTP %d)",
-						errResp.Error.Type, errResp.Error.Message, statusErr.StatusCode)
-				}
-				return "", fmt.Errorf("API error: %s", errResp.Error.Message)
-			}
-		}
-		return "", err
+		return "", p.surfaceAPIError(err)
 	}
 
 	return p.extractText(&result, body)
+}
+
+// surfaceAPIError extracts the structured message from an Anthropic error
+// body when parseable; otherwise the original error is returned.
+func (p *Provider) surfaceAPIError(err error) error {
+	var statusErr *llmc.HTTPStatusError
+	if errors.As(err, &statusErr) {
+		var errResp MessagesAPIResponse
+		if json.Unmarshal(statusErr.Body, &errResp) == nil && errResp.Error != nil {
+			if p.debug {
+				return fmt.Errorf("API error [%s]: %s (HTTP %d)",
+					errResp.Error.Type, errResp.Error.Message, statusErr.StatusCode)
+			}
+			return fmt.Errorf("API error: %s", errResp.Error.Message)
+		}
+	}
+	return err
+}
+
+// ChatWithTools sends the conversation history with function tools available
+// and returns the model's text and/or requested tool calls.
+func (p *Provider) ChatWithTools(ctx context.Context, systemPrompt string, messages []llmc.Message, tools []llmc.ToolDef) (*llmc.TurnResult, error) {
+	if p.webSearchEnabled {
+		return nil, fmt.Errorf("web search is not supported by Anthropic provider")
+	}
+
+	_, modelName, err := llmc.ParseModelString(p.config.GetModel())
+	if err != nil {
+		return nil, fmt.Errorf("invalid model format: %w", err)
+	}
+
+	toolSpecs := make([]ToolSpec, 0, len(tools))
+	for _, tool := range tools {
+		toolSpecs = append(toolSpecs, ToolSpec{
+			Name:        tool.Name,
+			Description: tool.Description,
+			InputSchema: tool.Parameters,
+		})
+	}
+
+	reqBody := MessagesAPIRequest{
+		Model:     modelName,
+		MaxTokens: 8192, // Default max tokens
+		System:    systemPrompt,
+		Messages:  buildMessageInputs(messages),
+		Tools:     toolSpecs,
+	}
+
+	url, headers, err := p.endpoint("/messages")
+	if err != nil {
+		return nil, err
+	}
+
+	var result MessagesAPIResponse
+	body, err := llmc.DoJSON(ctx, http.MethodPost, url, headers, reqBody, &result, p.debug)
+	if err != nil {
+		return nil, p.surfaceAPIError(err)
+	}
+
+	return p.extractTurn(&result, body)
+}
+
+// buildMessageInputs converts neutral history messages into Messages API
+// inputs. Consecutive "tool" messages are merged into a single user message
+// of tool_result blocks: the API requires strictly alternating user/assistant
+// roles, and parallel tool calls produce multiple results in a row.
+func buildMessageInputs(messages []llmc.Message) []MessageInput {
+	inputs := make([]MessageInput, 0, len(messages))
+	for _, msg := range messages {
+		switch {
+		case msg.Role == "tool":
+			block := Content{
+				Type:          "tool_result",
+				ToolUseID:     msg.ToolCallID,
+				ResultContent: msg.Content,
+				IsError:       msg.ToolIsError,
+			}
+			if n := len(inputs); n > 0 && inputs[n-1].Role == "user" && len(inputs[n-1].Content) > 0 && inputs[n-1].Content[0].Type == "tool_result" {
+				inputs[n-1].Content = append(inputs[n-1].Content, block)
+				continue
+			}
+			inputs = append(inputs, MessageInput{Role: "user", Content: []Content{block}})
+		case len(msg.ToolCalls) > 0:
+			var blocks []Content
+			if msg.Content != "" {
+				blocks = append(blocks, Content{Type: "text", Text: msg.Content})
+			}
+			for _, call := range msg.ToolCalls {
+				input := json.RawMessage(call.Arguments)
+				if call.Arguments == "" {
+					input = json.RawMessage("{}")
+				}
+				blocks = append(blocks, Content{
+					Type:  "tool_use",
+					ID:    call.ID,
+					Name:  call.Name,
+					Input: input,
+				})
+			}
+			inputs = append(inputs, MessageInput{Role: msg.Role, Content: blocks})
+		default:
+			inputs = append(inputs, MessageInput{
+				Role:    msg.Role,
+				Content: []Content{{Type: "text", Text: msg.Content}},
+			})
+		}
+	}
+	return inputs
+}
+
+// extractTurn pulls text and tool_use calls out of a Messages API result.
+func (p *Provider) extractTurn(result *MessagesAPIResponse, body []byte) (*llmc.TurnResult, error) {
+	if result.Error != nil {
+		if p.debug {
+			return nil, fmt.Errorf("API error [%s]: %s (id=%s)",
+				result.Error.Type, result.Error.Message, result.ID)
+		}
+		return nil, fmt.Errorf("API error: %s", result.Error.Message)
+	}
+
+	turn := &llmc.TurnResult{Text: "", ToolCalls: nil}
+	var textBlocks []string
+	for _, content := range result.Content {
+		switch content.Type {
+		case "text":
+			if content.Text != "" {
+				textBlocks = append(textBlocks, content.Text)
+			}
+		case "tool_use":
+			turn.ToolCalls = append(turn.ToolCalls, llmc.ToolCall{
+				ID:        content.ID,
+				Name:      content.Name,
+				Arguments: string(content.Input),
+			})
+		}
+	}
+	turn.Text = strings.Join(textBlocks, "\n")
+
+	if turn.Text == "" && len(turn.ToolCalls) == 0 {
+		if p.debug {
+			return nil, fmt.Errorf("no text or tool calls found in API response (id=%s)\nRaw response: %s",
+				result.ID, string(body))
+		}
+		return nil, fmt.Errorf("no text or tool calls found in API response. Use --verbose for details")
+	}
+
+	return turn, nil
 }
 
 // extractText pulls the text blocks out of a Messages API result. body is the

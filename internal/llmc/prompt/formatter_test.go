@@ -24,6 +24,7 @@ system = "You are a helpful assistant."
 user = "Translate: {{input}}"
 model = "openai:gpt-4"
 web_search = true
+tools = true
 `)
 
 	p, err := LoadPrompt(path)
@@ -43,6 +44,9 @@ web_search = true
 	if p.WebSearch == nil || !*p.WebSearch {
 		t.Errorf("WebSearch = %v, want true", p.WebSearch)
 	}
+	if p.Tools == nil || !*p.Tools {
+		t.Errorf("Tools = %v, want true", p.Tools)
+	}
 }
 
 func TestLoadPromptOptionalFieldsOmitted(t *testing.T) {
@@ -61,6 +65,9 @@ user = "usr"
 	}
 	if p.WebSearch != nil {
 		t.Errorf("WebSearch = %v, want nil", p.WebSearch)
+	}
+	if p.Tools != nil {
+		t.Errorf("Tools = %v, want nil", p.Tools)
 	}
 }
 
@@ -185,7 +192,7 @@ model = "@sonnet"
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			system, user, model, webSearch, err := FormatMessage(tt.message, tt.promptName, tt.promptDirs, tt.args)
+			system, user, opts, err := FormatMessage(tt.message, tt.promptName, tt.promptDirs, tt.args)
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("FormatMessage() error = %v, wantErr %v", err, tt.wantErr)
 			}
@@ -199,14 +206,14 @@ model = "@sonnet"
 				t.Errorf("FormatMessage() user = %q, want %q", user, tt.wantUser)
 			}
 			if tt.wantModel == "" {
-				if model != nil {
-					t.Errorf("FormatMessage() model = %v, want nil", *model)
+				if opts.Model != nil {
+					t.Errorf("FormatMessage() model = %v, want nil", *opts.Model)
 				}
-			} else if model == nil || *model != tt.wantModel {
-				t.Errorf("FormatMessage() model = %v, want %v", model, tt.wantModel)
+			} else if opts.Model == nil || *opts.Model != tt.wantModel {
+				t.Errorf("FormatMessage() model = %v, want %v", opts.Model, tt.wantModel)
 			}
-			if tt.promptName == "with-model" && (webSearch == nil || !*webSearch) {
-				t.Errorf("FormatMessage() webSearch = %v, want true", webSearch)
+			if tt.promptName == "with-model" && (opts.WebSearch == nil || !*opts.WebSearch) {
+				t.Errorf("FormatMessage() webSearch = %v, want true", opts.WebSearch)
 			}
 		})
 	}
@@ -224,7 +231,7 @@ system = "from dir2"
 user = "{{input}}"
 `)
 
-	system, _, _, _, err := FormatMessage("msg", "dup", []string{dir1, dir2}, nil)
+	system, _, _, err := FormatMessage("msg", "dup", []string{dir1, dir2}, nil)
 	if err != nil {
 		t.Fatalf("FormatMessage() unexpected error: %v", err)
 	}

@@ -224,6 +224,199 @@ Sources:
 [2] Another Source - https://example.com/article2
 ```
 
+### Tool Calling (Built-in Tools)
+
+Enable tool calling to let the model fetch external resources on its own
+during a conversation. When enabled, the model can decide to call built-in
+tools, llmc executes them locally, and the results are fed back to the model
+until it produces a final answer.
+
+```bash
+# Enable tools for a single query
+llmc chat --tools "Summarize https://example.com/article"
+
+# Works in interactive mode too
+llmc sessions start --tools
+
+# Skip confirmation prompts (exec_command / write_file)
+llmc chat --tools --yes "Run the tests and summarize the failures"
+
+# Enable by default in config file
+# Add to $HOME/.config/llmc/config.toml:
+# enable_tools = true
+```
+
+**Built-in tools:**
+
+| Tool | Description | Confirmation |
+|------|-------------|--------------|
+| `fetch_url` | HTTP GET a URL and return the body as text (http/https only, 256KB limit, 30s timeout) | No |
+| `read_file` | Read a local file (relative paths resolve from the current directory, 256KB limit) | Deny list |
+| `exec_command` | Run a shell command via `sh -c` and return stdout/stderr and the exit code (64KB limit, 60s timeout) | Yes |
+| `write_file` | Write text to a local file (the parent directory must exist, 1MB limit) | Yes |
+
+Tool calling can be enabled through multiple methods with the same priority
+order as web search: flag (`--tools`) > environment variable
+(`LLMC_ENABLE_TOOLS`) > prompt template (`tools = true`) > config file
+(`enable_tools`).
+
+**Confirmation and safety:**
+- `exec_command` and `write_file` show what will be executed and ask for
+  `[y/N]` confirmation before running. `--yes` skips the prompt, and
+  `exec_allowed_commands` pre-approves specific commands.
+- When stdin is not a TTY (e.g. piped input), anything that would need
+  confirmation is automatically denied and the model is told to proceed
+  without it.
+- `fetch_url` can reach any http/https URL, including internal addresses, and
+  has no allow list. Enable tools only for input you trust.
+- File paths are restricted by the rules below, with credential directories
+  denied by default.
+- A single turn is limited to 10 tool-loop iterations.
+
+#### Command Allow and Deny Rules
+
+By default every `exec_command` invocation asks for `[y/N]` confirmation. Use
+the allow rules to pre-approve routine commands so they stop prompting, and the
+deny rules to block commands outright. Rules are a table of command name to
+subcommands, where an empty list (or `["*"]`) covers every subcommand:
+
+```toml
+# $HOME/.config/llmc/config.toml
+[exec_allowed_commands]
+git = ["status", "diff", "log"]   # git status / git diff / git log only
+go = ["test", "build", "vet"]
+ls = []                           # any ls invocation
+cat = ["*"]                       # same as []
+
+[exec_denied_commands]
+git = ["push"]                    # carve an exception out of an allow rule
+```
+
+If you prefer a single line, TOML inline tables work too:
+
+```toml
+exec_allowed_commands = { git = ["status", "diff"], ls = [] }
+```
+
+The command name must match the rule key exactly, and the rest of the command
+matches a listed subcommand by whole-word prefix, so `status` covers
+`status --short` but not `status-ish`. Rules apply to every command in the
+shell line (split on unquoted `;`, `|`, `&` and newlines).
+
+- **Allowed** → runs without a confirmation prompt.
+- **Denied** → refused, ahead of the allow rules and of `--yes`. Use it to
+  block a subcommand of an otherwise allowed command.
+- **Neither** → the usual `[y/N]` prompt.
+
+Auto-approval needs every command in the line to be allowed: `ls && curl
+example.com` still prompts when only `ls` is allowed. Lines using **command
+substitution** (`$(...)`, backticks, `<(...)`) or **redirection** (`>`, `>>`,
+`<`) are never auto-approved, because prefix matching cannot see what the
+substituted command is or what the redirection would overwrite — `ls >
+~/.ssh/authorized_keys` is not a read-only command. Quoted characters don't
+count, so `git log --grep "a > b"` is fine.
+
+**The allow rules are not a sandbox.** Matching a shell string cannot be a
+security boundary, so by default the rules only decide whether you are *asked*,
+never whether a command *may run*.
+
+To make the allow rules a gate instead, refuse everything else:
+
+```toml
+exec_unlisted = "deny"   # "confirm" (default) | "deny"
+```
+
+In `deny` mode nothing runs unless it matches an allow rule, and lines with
+substitution or redirection are refused rather than confirmed. This is a much
+stronger posture, but still not a sandbox: allowing a command grants everything
+that command itself can do — `find` has `-exec`, `git` has `-c core.pager=`,
+and allowing `sh` or `env` allows anything. When `deny` mode leaves nothing
+runnable, `exec_command` isn't advertised to the model at all.
+
+#### File Path Allow and Deny Rules
+
+`write_file` and `read_file` take the same shape of rules, on paths instead of
+commands:
+
+```toml
+write_allowed_paths = ["."]                     # skip confirmation for these
+write_denied_paths = ["~/.ssh", ".git", ".env"] # always refuse
+write_unlisted = "confirm"                      # "confirm" (default) | "deny"
+
+read_denied_paths = ["~/.ssh", "~/.config/llmc", "*.pem"]
+```
+
+A rule **containing a path separator** covers that path and everything under
+it, after `~` expansion and resolution against the current directory: `~/.ssh`
+covers `~/.ssh/config`. A rule **without a separator** is matched as a glob
+against each path component: `.git` covers any `.git` directory at any depth,
+and `*.pem` covers any `.pem` file.
+
+`write_file` behaves like `exec_command`: allowed paths write without a prompt,
+denied paths are refused ahead of both the allow rules and `--yes`, and
+anything else prompts (or is refused with `write_unlisted = "deny"`).
+`read_file` needs no confirmation, so it has deny rules only — everything not
+denied simply reads.
+
+Paths are **canonicalized before matching**: made absolute, with `..` resolved
+and symlinks in the parent chain followed. Without that, `./a/../../../etc/hosts`
+or a symlinked directory would walk straight past the rules. The confirmation
+prompt shows the canonical path for the same reason. `write_file` additionally
+**refuses to write through a symlink**, since that would modify a file outside
+the path you approved. Reads may follow symlinks, but the deny rules are
+checked against the real target.
+
+**Defaults ship with a deny list**, so credentials are out of reach without any
+configuration:
+
+| Setting | Default |
+|---------|---------|
+| `read_denied_paths` | `~/.ssh`, `~/.aws`, `~/.gnupg`, `~/.config/llmc`, `.env`, `*.pem` |
+| `write_denied_paths` | `~/.ssh`, `~/.aws`, `~/.gnupg`, `~/.config/llmc`, `.git` |
+
+`~/.config/llmc` is on both lists because it holds your provider tokens. Set
+the lists to `[]` if you really want them unrestricted.
+
+Note that these rules do not cover writes made **through `exec_command`**: a
+shell command you approve can write anywhere, and even in `exec_unlisted =
+"deny"` mode, allowing something like `tee` or `sed` allows writes. Path rules
+and command rules are complementary; neither subsumes the other.
+
+#### Environment Variables Passed to Commands
+
+By default `exec_command` inherits your environment minus anything that looks
+like a credential, so the model cannot read your API keys back out with
+`env`. Variables are matched by **name**: `LLMC_*` plus any name containing
+`TOKEN`, `SECRET`, `PASSWORD`, `API_KEY`, `ACCESS_KEY`, `CREDENTIAL`,
+`PRIVATE_KEY` or `SESSION_KEY`.
+
+```toml
+# "filtered" (default) | "minimal" | "all"
+exec_env_mode = "filtered"
+
+# Pass these through regardless of the mode
+exec_env_passthrough = ["GITHUB_TOKEN"]
+```
+
+| Mode | Behavior |
+|------|----------|
+| `filtered` | Inherit everything except credential-looking names (default) |
+| `minimal` | Pass only `PATH`, `HOME`, `USER`, `SHELL`, `LANG`, `LC_ALL`, `TERM`, `TZ`, `PWD` |
+| `all` | Inherit the parent environment unchanged (no filtering) |
+
+`read_file` is covered separately by `read_denied_paths`, which denies
+`~/.config/llmc` by default so the config file's tokens are out of reach too.
+
+**Provider support:** all four providers (OpenAI, Gemini, Anthropic, Ollama
+with a tool-capable model). Web search and tools can be combined on OpenAI
+and Gemini; note that some Gemini models reject the combination and return an
+API error. Anthropic still rejects `--web-search` regardless of tools.
+
+Tool calls and their results are recorded in session history (shown as
+`Tool` entries in `llmc sessions show`) and count toward the session message
+threshold. They are skipped when summarizing a session, and stripped from the
+request when you continue a tools-enabled session with tools disabled.
+
 ### Session Management
 
 #### Session Storage
@@ -509,6 +702,9 @@ llmc init
 ```toml
 model = "openai:gpt-4.1"  # Format: provider:model
 enable_web_search = false
+enable_tools = false
+exec_unlisted = "confirm"   # Unlisted commands: "confirm" | "deny"
+exec_env_mode = "filtered"  # Environment passed to exec_command
 session_retention_days = 30  # Delete sessions older than 30 days (default)
 
 # Option 1: Reference environment variables (recommended for security)
@@ -556,7 +752,7 @@ All settings follow this priority order (higher overrides lower):
 
 1. **Command-line flags** (highest priority)
 2. **Environment variables** (with `LLMC_` prefix)
-3. **Prompt template** (for `model` and `web_search` only)
+3. **Prompt template** (for `model`, `web_search`, and `tools` only)
 4. **User configuration file** (`$HOME/.config/llmc/config.toml`)
 5. **System-wide configuration** (`/etc/llmc/config.toml` or `/usr/local/etc/llmc/config.toml`)
 6. **Default values** (lowest priority)
@@ -586,6 +782,19 @@ export LLMC_PROMPT_DIRS="/path/to/prompts,/another/directory"
 
 # Enable web search
 export LLMC_ENABLE_WEB_SEARCH=true
+
+# Enable built-in tool calling
+export LLMC_ENABLE_TOOLS=true
+
+# Tool policy. exec_allowed_commands / exec_denied_commands are nested tables
+# and can only be set in the config file (like model_aliases).
+export LLMC_EXEC_UNLISTED=confirm
+export LLMC_EXEC_ENV_MODE=filtered
+export LLMC_EXEC_ENV_PASSTHROUGH="GITHUB_TOKEN"
+export LLMC_WRITE_ALLOWED_PATHS="."
+export LLMC_WRITE_DENIED_PATHS="~/.ssh,.git"
+export LLMC_WRITE_UNLISTED=confirm
+export LLMC_READ_DENIED_PATHS="~/.ssh,*.pem"
 
 # Set session message threshold
 export LLMC_SESSION_MESSAGE_THRESHOLD=50
@@ -659,6 +868,22 @@ prompt_dirs = ["/path/to/prompts", "/another/directory"]
 
 # Feature flags
 enable_web_search = false  # Enable web search by default
+enable_tools = false       # Enable built-in tool calling by default
+
+# Tool policy (see "Tool Calling")
+exec_unlisted = "confirm"    # Unlisted commands: "confirm" | "deny"
+exec_env_mode = "filtered"   # "filtered" | "minimal" | "all"
+exec_env_passthrough = []    # Variables passed to exec_command regardless of mode
+write_allowed_paths = []     # Paths that skip the write confirmation prompt
+write_denied_paths = ["~/.ssh", "~/.aws", "~/.gnupg", "~/.config/llmc", ".git"]
+write_unlisted = "confirm"   # Unlisted write paths: "confirm" | "deny"
+read_denied_paths = ["~/.ssh", "~/.aws", "~/.gnupg", "~/.config/llmc", ".env", "*.pem"]
+
+[exec_allowed_commands]      # Command name -> subcommands that skip the prompt ([] = all)
+# git = ["status", "diff"]
+
+[exec_denied_commands]       # Always refused, even with --yes
+# git = ["push"]
 
 # Session management
 session_message_threshold = 50  # Warn when session exceeds message count (0 to disable)
@@ -788,6 +1013,7 @@ system = "System prompt with optional {{input}} placeholder"
 user = "User prompt with optional {{input}} placeholder"
 model = "optional-model-name"  # Optional: overrides default model
 web_search = true  # Optional: enables web search
+tools = true  # Optional: enables built-in tools
 ```
 
 The `{{input}}` placeholder is replaced with the user's message. Additional placeholders can be passed via `--arg` flag:

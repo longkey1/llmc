@@ -2,6 +2,7 @@ package gemini
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
@@ -51,12 +52,35 @@ type GeminiContent struct {
 
 // GeminiPart represents a part of the content in the Gemini request format
 type GeminiPart struct {
-	Text string `json:"text"`
+	Text             string                  `json:"text,omitempty"`
+	FunctionCall     *GeminiFunctionCall     `json:"functionCall,omitempty"`
+	FunctionResponse *GeminiFunctionResponse `json:"functionResponse,omitempty"`
+}
+
+// GeminiFunctionCall represents a function call requested by the model
+type GeminiFunctionCall struct {
+	Name string          `json:"name"`
+	Args json.RawMessage `json:"args,omitempty"`
+}
+
+// GeminiFunctionResponse represents a function execution result sent back to
+// the model. Gemini matches responses to calls by function name.
+type GeminiFunctionResponse struct {
+	Name     string         `json:"name"`
+	Response map[string]any `json:"response"`
 }
 
 // GeminiTool represents a tool configuration for Gemini
 type GeminiTool struct {
-	GoogleSearch *GeminiGoogleSearch `json:"google_search,omitempty"`
+	GoogleSearch         *GeminiGoogleSearch         `json:"google_search,omitempty"`
+	FunctionDeclarations []GeminiFunctionDeclaration `json:"function_declarations,omitempty"`
+}
+
+// GeminiFunctionDeclaration represents a function tool definition
+type GeminiFunctionDeclaration struct {
+	Name        string         `json:"name"`
+	Description string         `json:"description,omitempty"`
+	Parameters  map[string]any `json:"parameters,omitempty"`
 }
 
 // GeminiGoogleSearch represents Google Search grounding configuration
@@ -82,7 +106,8 @@ type GeminiResponseContent struct {
 
 // GeminiResponsePart represents a part of the response content
 type GeminiResponsePart struct {
-	Text string `json:"text"`
+	Text         string              `json:"text"`
+	FunctionCall *GeminiFunctionCall `json:"functionCall,omitempty"`
 }
 
 // GeminiGroundingMetadata contains grounding information
@@ -278,6 +303,159 @@ func (p *Provider) ChatWithHistory(ctx context.Context, systemPrompt string, mes
 	}
 
 	return p.extractText(&result, body)
+}
+
+// ChatWithTools sends the conversation history with function tools available
+// and returns the model's text and/or requested tool calls.
+func (p *Provider) ChatWithTools(ctx context.Context, systemPrompt string, messages []llmc.Message, tools []llmc.ToolDef) (*llmc.TurnResult, error) {
+	reqBody := GeminiRequest{
+		Contents:          buildContents(messages),
+		SystemInstruction: nil,
+		Tools:             p.buildTools(tools),
+	}
+	if systemPrompt != "" {
+		reqBody.SystemInstruction = &GeminiSystemInstruction{
+			Parts: []GeminiPart{{Text: systemPrompt}},
+		}
+	}
+
+	_, modelName, err := llmc.ParseModelString(p.config.GetModel())
+	if err != nil {
+		return nil, fmt.Errorf("invalid model format: %w", err)
+	}
+
+	url, err := p.endpoint(fmt.Sprintf("/models/%s:generateContent", modelName))
+	if err != nil {
+		return nil, err
+	}
+
+	var result GeminiResponse
+	body, err := llmc.DoJSON(ctx, http.MethodPost, url, nil, reqBody, &result, p.debug)
+	if err != nil {
+		return nil, err
+	}
+
+	if p.debug {
+		fmt.Fprintf(os.Stderr, "Raw API response: %s\n", string(body))
+	}
+
+	return p.extractTurn(&result, body)
+}
+
+// buildContents converts neutral history messages into Gemini contents,
+// expanding assistant tool calls into functionCall parts and tool results
+// into user functionResponse parts.
+func buildContents(messages []llmc.Message) []GeminiContent {
+	contents := make([]GeminiContent, 0, len(messages))
+	for _, msg := range messages {
+		switch {
+		case msg.Role == "tool":
+			responseKey := "output"
+			if msg.ToolIsError {
+				responseKey = "error"
+			}
+			contents = append(contents, GeminiContent{
+				Role: "user",
+				Parts: []GeminiPart{{
+					FunctionResponse: &GeminiFunctionResponse{
+						Name:     msg.ToolName,
+						Response: map[string]any{responseKey: msg.Content},
+					},
+				}},
+			})
+		case len(msg.ToolCalls) > 0:
+			var parts []GeminiPart
+			if msg.Content != "" {
+				parts = append(parts, GeminiPart{Text: msg.Content})
+			}
+			for _, call := range msg.ToolCalls {
+				args := json.RawMessage(call.Arguments)
+				if call.Arguments == "" {
+					args = json.RawMessage("{}")
+				}
+				parts = append(parts, GeminiPart{
+					FunctionCall: &GeminiFunctionCall{Name: call.Name, Args: args},
+				})
+			}
+			contents = append(contents, GeminiContent{Role: "model", Parts: parts})
+		default:
+			role := msg.Role
+			if role == "assistant" {
+				role = "model"
+			}
+			contents = append(contents, GeminiContent{
+				Role:  role,
+				Parts: []GeminiPart{{Text: msg.Content}},
+			})
+		}
+	}
+	return contents
+}
+
+// buildTools assembles the tools array, combining Google Search grounding
+// (when enabled) with the given function declarations. Some models reject
+// the combination; the API error is surfaced as-is.
+func (p *Provider) buildTools(tools []llmc.ToolDef) []GeminiTool {
+	var out []GeminiTool
+	if p.webSearchEnabled {
+		out = append(out, GeminiTool{GoogleSearch: &GeminiGoogleSearch{}})
+	}
+	if len(tools) > 0 {
+		declarations := make([]GeminiFunctionDeclaration, 0, len(tools))
+		for _, tool := range tools {
+			declarations = append(declarations, GeminiFunctionDeclaration{
+				Name:        tool.Name,
+				Description: tool.Description,
+				Parameters:  tool.Parameters,
+			})
+		}
+		out = append(out, GeminiTool{FunctionDeclarations: declarations})
+	}
+	return out
+}
+
+// extractTurn pulls text and function calls out of a Gemini result. Gemini
+// doesn't issue call IDs, so sequential IDs are synthesized; responses are
+// matched by function name on the way back.
+func (p *Provider) extractTurn(result *GeminiResponse, body []byte) (*llmc.TurnResult, error) {
+	if len(result.Candidates) == 0 {
+		if p.debug {
+			return nil, fmt.Errorf("no response from API (empty candidates)\nRaw response: %s", string(body))
+		}
+		return nil, fmt.Errorf("no response from API")
+	}
+
+	turn := &llmc.TurnResult{Text: "", ToolCalls: nil}
+	var textParts []string
+	for _, part := range result.Candidates[0].Content.Parts {
+		if part.FunctionCall != nil {
+			turn.ToolCalls = append(turn.ToolCalls, llmc.ToolCall{
+				ID:        fmt.Sprintf("call-%d", len(turn.ToolCalls)),
+				Name:      part.FunctionCall.Name,
+				Arguments: string(part.FunctionCall.Args),
+			})
+			continue
+		}
+		if part.Text != "" {
+			textParts = append(textParts, part.Text)
+		}
+	}
+	turn.Text = strings.Join(textParts, "\n")
+
+	if turn.Text == "" && len(turn.ToolCalls) == 0 {
+		if p.debug {
+			return nil, fmt.Errorf("no text or function calls in API response\nRaw response: %s", string(body))
+		}
+		return nil, fmt.Errorf("no text or function calls in API response. Use --verbose for details")
+	}
+
+	if turn.Text != "" && result.GroundingMetadata != nil && len(result.GroundingMetadata.GroundingChunks) > 0 {
+		if citations := extractGroundingCitations(result.GroundingMetadata); citations != "" {
+			turn.Text += "\n\n---\nSources:\n" + citations
+		}
+	}
+
+	return turn, nil
 }
 
 // extractText pulls the response text (and citations) out of a Gemini result.

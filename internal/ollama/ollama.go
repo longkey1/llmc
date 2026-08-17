@@ -34,12 +34,42 @@ type ModelData struct {
 type ChatCompletionsRequest struct {
 	Model    string        `json:"model"`
 	Messages []ChatMessage `json:"messages"`
+	Tools    []ChatTool    `json:"tools,omitempty"`
 }
 
 // ChatMessage represents a message in the conversation
 type ChatMessage struct {
-	Role    string `json:"role"`    // "system", "user" or "assistant"
-	Content string `json:"content"` // Message content
+	Role       string         `json:"role"`    // "system", "user", "assistant" or "tool"
+	Content    string         `json:"content"` // Message content
+	ToolCalls  []ChatToolCall `json:"tool_calls,omitempty"`
+	ToolCallID string         `json:"tool_call_id,omitempty"` // role "tool" only
+}
+
+// ChatTool represents a function tool definition in the standard Chat
+// Completions format
+type ChatTool struct {
+	Type     string           `json:"type"` // "function"
+	Function ChatToolFunction `json:"function"`
+}
+
+// ChatToolFunction describes the function inside a ChatTool
+type ChatToolFunction struct {
+	Name        string         `json:"name"`
+	Description string         `json:"description,omitempty"`
+	Parameters  map[string]any `json:"parameters,omitempty"`
+}
+
+// ChatToolCall represents a tool call in an assistant message
+type ChatToolCall struct {
+	ID       string           `json:"id"`
+	Type     string           `json:"type"` // "function"
+	Function ChatCallFunction `json:"function"`
+}
+
+// ChatCallFunction carries the function name and raw JSON arguments
+type ChatCallFunction struct {
+	Name      string `json:"name"`
+	Arguments string `json:"arguments"`
 }
 
 // ChatCompletionsResponse represents the response from the Chat Completions API
@@ -202,4 +232,91 @@ func (p *Provider) ChatWithHistory(ctx context.Context, systemPrompt string, mes
 	}
 
 	return result.Choices[0].Message.Content, nil
+}
+
+// ChatWithTools sends the conversation history with function tools available
+// and returns the model's text and/or requested tool calls.
+func (p *Provider) ChatWithTools(ctx context.Context, systemPrompt string, messages []llmc.Message, tools []llmc.ToolDef) (*llmc.TurnResult, error) {
+	_, modelName, err := llmc.ParseModelString(p.config.GetModel())
+	if err != nil {
+		return nil, fmt.Errorf("invalid model format: %w", err)
+	}
+
+	chatTools := make([]ChatTool, 0, len(tools))
+	for _, tool := range tools {
+		chatTools = append(chatTools, ChatTool{
+			Type: "function",
+			Function: ChatToolFunction{
+				Name:        tool.Name,
+				Description: tool.Description,
+				Parameters:  tool.Parameters,
+			},
+		})
+	}
+
+	reqBody := ChatCompletionsRequest{
+		Model:    modelName,
+		Messages: buildChatMessages(systemPrompt, messages),
+		Tools:    chatTools,
+	}
+
+	url, headers, err := p.endpoint("/chat/completions")
+	if err != nil {
+		return nil, err
+	}
+
+	var result ChatCompletionsResponse
+	body, err := llmc.DoJSON(ctx, http.MethodPost, url, headers, reqBody, &result, p.debug)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(result.Choices) == 0 {
+		if p.debug {
+			return nil, fmt.Errorf("API returned empty response (id=%s)\nRaw response: %s",
+				result.ID, string(body))
+		}
+		return nil, fmt.Errorf("API returned empty response. Use --verbose for details")
+	}
+
+	message := result.Choices[0].Message
+	turn := &llmc.TurnResult{Text: message.Content, ToolCalls: nil}
+	for _, call := range message.ToolCalls {
+		turn.ToolCalls = append(turn.ToolCalls, llmc.ToolCall{
+			ID:        call.ID,
+			Name:      call.Function.Name,
+			Arguments: call.Function.Arguments,
+		})
+	}
+	return turn, nil
+}
+
+// buildChatMessages converts neutral history messages into Chat Completions
+// messages, prepending the system prompt as the first message.
+func buildChatMessages(systemPrompt string, messages []llmc.Message) []ChatMessage {
+	chatMessages := make([]ChatMessage, 0, len(messages)+1)
+	if systemPrompt != "" {
+		chatMessages = append(chatMessages, ChatMessage{Role: "system", Content: systemPrompt})
+	}
+	for _, msg := range messages {
+		chatMsg := ChatMessage{
+			Role:    msg.Role,
+			Content: msg.Content,
+		}
+		if msg.Role == "tool" {
+			chatMsg.ToolCallID = msg.ToolCallID
+		}
+		for _, call := range msg.ToolCalls {
+			chatMsg.ToolCalls = append(chatMsg.ToolCalls, ChatToolCall{
+				ID:   call.ID,
+				Type: "function",
+				Function: ChatCallFunction{
+					Name:      call.Name,
+					Arguments: call.Arguments,
+				},
+			})
+		}
+		chatMessages = append(chatMessages, chatMsg)
+	}
+	return chatMessages
 }

@@ -34,19 +34,31 @@ type ModelData struct {
 type ResponsesAPIRequest struct {
 	Model        string             `json:"model"`
 	Instructions string             `json:"instructions,omitempty"` // System-level instructions (optional)
-	Input        []InputMessage     `json:"input"`                  // Conversation messages
+	Input        []InputItem        `json:"input"`                  // Conversation messages and function call items
 	Tools        []ResponsesAPITool `json:"tools,omitempty"`
 }
 
-// InputMessage represents a message in the conversation history
-type InputMessage struct {
-	Role    string `json:"role"`    // "user" or "assistant"
-	Content string `json:"content"` // Message content
+// InputItem represents one item in the Responses API input array: a plain
+// message (Role/Content), a "function_call" item, or a "function_call_output"
+// item.
+type InputItem struct {
+	Type      string `json:"type,omitempty"`      // empty for messages, "function_call", "function_call_output"
+	Role      string `json:"role,omitempty"`      // "user" or "assistant" (messages only)
+	Content   string `json:"content,omitempty"`   // message content
+	CallID    string `json:"call_id,omitempty"`   // function_call / function_call_output
+	Name      string `json:"name,omitempty"`      // function_call
+	Arguments string `json:"arguments,omitempty"` // function_call (raw JSON)
+	Output    string `json:"output,omitempty"`    // function_call_output
 }
 
-// ResponsesAPITool represents a tool configuration
+// ResponsesAPITool represents a tool configuration. Server-side tools
+// (web_search) carry only Type; function tools use the flat Responses API
+// form with Name/Description/Parameters at the top level.
 type ResponsesAPITool struct {
-	Type string `json:"type"`
+	Type        string         `json:"type"`
+	Name        string         `json:"name,omitempty"`
+	Description string         `json:"description,omitempty"`
+	Parameters  map[string]any `json:"parameters,omitempty"`
 }
 
 // ResponsesAPIResponse represents the response from OpenAI's Responses API
@@ -65,8 +77,11 @@ type ResponsesAPIError struct {
 
 // ResponsesAPIOutput represents an output element
 type ResponsesAPIOutput struct {
-	Type    string                `json:"type"`
-	Content []ResponsesAPIContent `json:"content,omitempty"`
+	Type      string                `json:"type"`
+	Content   []ResponsesAPIContent `json:"content,omitempty"`
+	CallID    string                `json:"call_id,omitempty"`   // function_call
+	Name      string                `json:"name,omitempty"`      // function_call
+	Arguments string                `json:"arguments,omitempty"` // function_call (raw JSON)
 }
 
 // ResponsesAPIContent represents content with text and annotations
@@ -179,15 +194,15 @@ func (p *Provider) ChatWithHistory(ctx context.Context, systemPrompt string, mes
 		return "", fmt.Errorf("invalid model format: %w", err)
 	}
 
-	// Convert messages to InputMessage array and append the new message
-	inputMessages := make([]InputMessage, 0, len(messages)+1)
+	// Convert messages to InputItem array and append the new message
+	inputMessages := make([]InputItem, 0, len(messages)+1)
 	for _, msg := range messages {
-		inputMessages = append(inputMessages, InputMessage{
+		inputMessages = append(inputMessages, InputItem{
 			Role:    msg.Role,
 			Content: msg.Content,
 		})
 	}
-	inputMessages = append(inputMessages, InputMessage{
+	inputMessages = append(inputMessages, InputItem{
 		Role:    "user",
 		Content: newMessage,
 	})
@@ -215,6 +230,134 @@ func (p *Provider) ChatWithHistory(ctx context.Context, systemPrompt string, mes
 	}
 
 	return p.extractText(&result, body)
+}
+
+// ChatWithTools sends the conversation history with function tools available
+// and returns the model's text and/or requested tool calls.
+func (p *Provider) ChatWithTools(ctx context.Context, systemPrompt string, messages []llmc.Message, tools []llmc.ToolDef) (*llmc.TurnResult, error) {
+	_, modelName, err := llmc.ParseModelString(p.config.GetModel())
+	if err != nil {
+		return nil, fmt.Errorf("invalid model format: %w", err)
+	}
+
+	reqBody := ResponsesAPIRequest{
+		Model:        modelName,
+		Instructions: systemPrompt,
+		Input:        buildInputItems(messages),
+		Tools:        p.buildTools(tools),
+	}
+
+	url, headers, err := p.endpoint("/responses")
+	if err != nil {
+		return nil, err
+	}
+
+	var result ResponsesAPIResponse
+	body, err := llmc.DoJSON(ctx, http.MethodPost, url, headers, reqBody, &result, p.debug)
+	if err != nil {
+		return nil, err
+	}
+
+	return p.extractTurn(&result, body)
+}
+
+// buildInputItems converts neutral history messages into Responses API input
+// items, expanding assistant tool calls and tool results into their typed
+// item forms.
+func buildInputItems(messages []llmc.Message) []InputItem {
+	items := make([]InputItem, 0, len(messages))
+	for _, msg := range messages {
+		switch {
+		case msg.Role == "tool":
+			items = append(items, InputItem{
+				Type:   "function_call_output",
+				CallID: msg.ToolCallID,
+				Output: msg.Content,
+			})
+		case len(msg.ToolCalls) > 0:
+			if msg.Content != "" {
+				items = append(items, InputItem{Role: msg.Role, Content: msg.Content})
+			}
+			for _, call := range msg.ToolCalls {
+				items = append(items, InputItem{
+					Type:      "function_call",
+					CallID:    call.ID,
+					Name:      call.Name,
+					Arguments: call.Arguments,
+				})
+			}
+		default:
+			items = append(items, InputItem{Role: msg.Role, Content: msg.Content})
+		}
+	}
+	return items
+}
+
+// buildTools assembles the tools array, combining the server-side web_search
+// tool (when enabled) with the given function tools.
+func (p *Provider) buildTools(tools []llmc.ToolDef) []ResponsesAPITool {
+	var out []ResponsesAPITool
+	if p.webSearchEnabled {
+		out = append(out, ResponsesAPITool{Type: "web_search"})
+	}
+	for _, tool := range tools {
+		out = append(out, ResponsesAPITool{
+			Type:        "function",
+			Name:        tool.Name,
+			Description: tool.Description,
+			Parameters:  tool.Parameters,
+		})
+	}
+	return out
+}
+
+// extractTurn pulls text and function calls out of a Responses API result.
+func (p *Provider) extractTurn(result *ResponsesAPIResponse, body []byte) (*llmc.TurnResult, error) {
+	if result.Error != nil {
+		if p.debug {
+			return nil, fmt.Errorf("API error [%s]: %s (id=%s, status=%s)",
+				result.Error.Code, result.Error.Message, result.ID, result.Status)
+		}
+		return nil, fmt.Errorf("API error: %s", result.Error.Message)
+	}
+
+	turn := &llmc.TurnResult{Text: "", ToolCalls: nil}
+	for i := range result.Output {
+		output := &result.Output[i]
+		switch output.Type {
+		case "function_call":
+			turn.ToolCalls = append(turn.ToolCalls, llmc.ToolCall{
+				ID:        output.CallID,
+				Name:      output.Name,
+				Arguments: output.Arguments,
+			})
+		case "message":
+			if len(output.Content) == 0 {
+				continue
+			}
+			content := output.Content[0]
+			text := content.Text
+			if len(content.Annotations) > 0 {
+				if citations := extractCitations(content.Annotations); citations != "" {
+					text += "\n\n---\nSources:\n" + citations
+				}
+			}
+			if turn.Text != "" {
+				turn.Text += "\n"
+			}
+			turn.Text += text
+		}
+	}
+
+	if turn.Text == "" && len(turn.ToolCalls) == 0 {
+		if p.debug {
+			return nil, fmt.Errorf("API returned no message or tool calls (id=%s, status=%s)\nRaw response: %s",
+				result.ID, result.Status, string(body))
+		}
+		return nil, fmt.Errorf("API returned no message or tool calls. Use --verbose for details")
+	}
+
+	return turn, nil
 }
 
 // extractText pulls the message text (and citations) out of a Responses API

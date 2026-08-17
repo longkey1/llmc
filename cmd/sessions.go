@@ -130,16 +130,11 @@ The ID can be a short ID (minimum 4 characters), full UUID, or "latest" for the 
 		fmt.Println("Message History:")
 		fmt.Println("----------------")
 		for i, msg := range sess.Messages {
-			roleLabel := "You"
-			if msg.Role == "assistant" {
-				roleLabel = "Assistant"
-			}
-
 			fmt.Printf("\n[%d] %s (%s):\n%s\n",
 				i+1,
-				roleLabel,
+				messageRoleLabel(msg.Role),
 				msg.Timestamp.Format("2006-01-02 15:04:05"),
-				msg.Content,
+				formatMessageBody(msg),
 			)
 		}
 
@@ -465,6 +460,9 @@ The ID can be a short ID (minimum 4 characters), full UUID, or "latest" for the 
 
 			for i := startIdx; i < len(ancestorSess.Messages); i++ {
 				msg := ancestorSess.Messages[i]
+				if !isSummarizableMessage(msg) {
+					continue
+				}
 				role := "User"
 				if msg.Role == "assistant" {
 					role = "Assistant"
@@ -481,6 +479,9 @@ The ID can be a short ID (minimum 4 characters), full UUID, or "latest" for the 
 		}
 		for i := startIdx; i < len(sess.Messages); i++ {
 			msg := sess.Messages[i]
+			if !isSummarizableMessage(msg) {
+				continue
+			}
 			role := "User"
 			if msg.Role == "assistant" {
 				role = "Assistant"
@@ -650,10 +651,11 @@ Examples:
 		if err != nil {
 			return fmt.Errorf("creating provider: %w", err)
 		}
+		llmProvider.SetWebSearch(resolveWebSearch(cmd, cfg, nil))
 		llmProvider.SetDebug(verbose)
 
 		// Start interactive mode
-		if err := runInteractiveMode(sess, llmProvider); err != nil {
+		if err := runInteractiveMode(sess, llmProvider, newTurnConfig(cmd, cfg, sess.SystemPrompt, nil)); err != nil {
 			return fmt.Errorf("interactive mode: %w", err)
 		}
 
@@ -662,7 +664,7 @@ Examples:
 }
 
 // runInteractiveMode starts an interactive chat session
-func runInteractiveMode(sess *session.Session, llmProvider llmc.Provider) error {
+func runInteractiveMode(sess *session.Session, llmProvider llmc.Provider, tc turnConfig) error {
 	// Print session header
 	fmt.Fprintf(os.Stderr, "\n=== Interactive Session [%s] ===\n", sess.GetShortID())
 	fmt.Fprintf(os.Stderr, "Model: %s\n", sess.Model)
@@ -739,31 +741,23 @@ func runInteractiveMode(sess *session.Session, llmProvider llmc.Provider) error 
 			break
 		}
 
-		// Add user message to session
-		sess.AddMessage("user", input)
-
-		// Get conversation history (excluding the just-added message)
-		historyMessages := sess.Messages[:len(sess.Messages)-1]
-
-		stopSpinner := startSpinner()
+		userMsg := llmc.Message{Role: "user", Content: input, Timestamp: time.Now()}
 
 		// Send message with history; Ctrl+C aborts only this request and
 		// returns to the prompt
 		ctx, stop := requestContext(context.Background())
-		response, err := llmProvider.ChatWithHistory(ctx, sess.SystemPrompt, historyMessages, input)
+		response, turnMessages, err := runTurn(ctx, llmProvider, sess.Messages, input, tc)
 		stop()
-
-		stopSpinner()
 
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			// Remove the failed message from history
-			sess.Messages = sess.Messages[:len(sess.Messages)-1]
+			// Nothing was persisted for the failed turn
 			continue
 		}
 
-		// Add assistant response
-		sess.AddMessage("assistant", response)
+		// Persist the user message and everything the turn generated
+		sess.AppendMessages(userMsg)
+		sess.AppendMessages(turnMessages...)
 
 		// Save session after each turn
 		if err := session.SaveSession(sess); err != nil {
@@ -902,6 +896,65 @@ func handleSpecialCommand(command string, sess *session.Session) bool {
 	}
 }
 
+// messageRoleLabel returns the display label for a message role.
+func messageRoleLabel(role string) string {
+	switch role {
+	case "assistant":
+		return "Assistant"
+	case "tool":
+		return "Tool"
+	default:
+		return "You"
+	}
+}
+
+// formatMessageBody renders a message body for display, summarizing
+// tool-loop details: assistant tool calls are listed with truncated
+// arguments, and tool outputs are truncated.
+func formatMessageBody(msg llmc.Message) string {
+	const (
+		maxArgsLen       = 80
+		maxToolOutputLen = 200
+	)
+
+	if msg.Role == "tool" {
+		return truncateWithEllipsis(msg.Content, maxToolOutputLen)
+	}
+
+	if len(msg.ToolCalls) == 0 {
+		return msg.Content
+	}
+
+	var b strings.Builder
+	if msg.Content != "" {
+		b.WriteString(msg.Content)
+	}
+	for _, call := range msg.ToolCalls {
+		if b.Len() > 0 {
+			b.WriteString("\n")
+		}
+		fmt.Fprintf(&b, "[tool call] %s(%s)", call.Name, truncateWithEllipsis(call.Arguments, maxArgsLen))
+	}
+	return b.String()
+}
+
+func truncateWithEllipsis(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	return s[:maxLen] + "..."
+}
+
+// isSummarizableMessage reports whether a message should be included in the
+// summarization prompt. Tool outputs and assistant messages that only carry
+// tool calls are skipped.
+func isSummarizableMessage(msg llmc.Message) bool {
+	if msg.Role == "tool" {
+		return false
+	}
+	return msg.Content != ""
+}
+
 func init() {
 	rootCmd.AddCommand(sessionsCmd)
 	sessionsCmd.AddCommand(sessionsListCmd)
@@ -914,4 +967,10 @@ func init() {
 	// sessionsDeleteCmd flags (for bulk deletion mode)
 	sessionsDeleteCmd.Flags().String("before", "", "Delete only sessions created before this date (format: YYYY-MM-DD, YYYY-MM, or YYYY)")
 	sessionsDeleteCmd.Flags().Bool("all", false, "Delete all sessions (overrides retention days setting)")
+
+	// sessionsStartCmd flags (shared variables with the chat command; each
+	// command resolves its own flag state via Flags().Changed)
+	sessionsStartCmd.Flags().BoolVar(&webSearch, "web-search", false, "Enable web search for real-time information")
+	sessionsStartCmd.Flags().BoolVar(&enableTools, "tools", false, "Enable built-in tools (fetch_url, read_file, exec_command, write_file)")
+	sessionsStartCmd.Flags().BoolVar(&autoApproveTool, "yes", false, "Skip confirmation prompts for tool execution (exec_command, write_file)")
 }

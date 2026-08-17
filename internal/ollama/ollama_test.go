@@ -76,7 +76,7 @@ func TestChat(t *testing.T) {
 	}
 	// Chat delegates to ChatWithHistory, so the messages are a single-message array
 	wantMessages := []ChatMessage{{Role: "user", Content: "hello"}}
-	if len(gotReq.Messages) != 1 || gotReq.Messages[0] != wantMessages[0] {
+	if len(gotReq.Messages) != 1 || gotReq.Messages[0].Role != wantMessages[0].Role || gotReq.Messages[0].Content != wantMessages[0].Content {
 		t.Errorf("request messages = %v, want %v", gotReq.Messages, wantMessages)
 	}
 }
@@ -199,7 +199,7 @@ func TestChatWithHistory(t *testing.T) {
 		t.Fatalf("messages length = %d, want %d", len(gotReq.Messages), len(wantMessages))
 	}
 	for i, want := range wantMessages {
-		if gotReq.Messages[i] != want {
+		if gotReq.Messages[i].Role != want.Role || gotReq.Messages[i].Content != want.Content {
 			t.Errorf("messages[%d] = %+v, want %+v", i, gotReq.Messages[i], want)
 		}
 	}

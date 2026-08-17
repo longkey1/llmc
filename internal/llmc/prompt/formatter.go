@@ -10,16 +10,26 @@ import (
 	"github.com/longkey1/llmc/internal/llmc"
 )
 
+// TemplateOptions carries the optional per-template settings (model, web
+// search, tools) from a prompt file. Nil fields mean "not specified"; the
+// caller falls back to the next configuration source.
+type TemplateOptions struct {
+	Model     *string
+	WebSearch *bool
+	Tools     *bool
+}
+
 // FormatMessage renders the message with the named prompt template.
-// It returns the rendered system and user prompts separately, plus the model
-// and web search settings from the template (if any). Returning them
-// separately (instead of a combined string) lets callers pass the system
-// prompt through the provider API's dedicated system field without fragile
-// re-parsing. With no template, system is empty and user is the message
-// unchanged.
-func FormatMessage(message string, promptName string, promptDirs []string, args []string) (system, user string, model *string, webSearch *bool, err error) {
+// It returns the rendered system and user prompts separately, plus the
+// template's optional settings. Returning system and user separately
+// (instead of a combined string) lets callers pass the system prompt through
+// the provider API's dedicated system field without fragile re-parsing. With
+// no template, system is empty, user is the message unchanged, and opts has
+// all-nil fields.
+func FormatMessage(message string, promptName string, promptDirs []string, args []string) (system, user string, opts *TemplateOptions, err error) {
+	emptyOpts := &TemplateOptions{Model: nil, WebSearch: nil, Tools: nil}
 	if promptName == "" {
-		return "", message, nil, nil, nil
+		return "", message, emptyOpts, nil
 	}
 
 	// Add .toml extension if not present
@@ -42,19 +52,19 @@ func FormatMessage(message string, promptName string, promptDirs []string, args 
 	}
 
 	if !found {
-		return "", "", nil, nil, fmt.Errorf("prompt file '%s' not found in any of the prompt directories: %v", promptFile, promptDirs)
+		return "", "", nil, fmt.Errorf("prompt file '%s' not found in any of the prompt directories: %v", promptFile, promptDirs)
 	}
 
 	// Load prompt template
 	promptTemplate, err := LoadPrompt(promptPath)
 	if err != nil {
-		return "", "", nil, nil, fmt.Errorf("error loading prompt file: %v", err)
+		return "", "", nil, fmt.Errorf("error loading prompt file: %v", err)
 	}
 
 	// Process command line arguments
 	argMap, err := processArgs(args)
 	if err != nil {
-		return "", "", nil, nil, fmt.Errorf("error processing arguments: %v", err)
+		return "", "", nil, fmt.Errorf("error processing arguments: %v", err)
 	}
 
 	// Create a map of all replacements
@@ -76,11 +86,15 @@ func FormatMessage(message string, promptName string, promptDirs []string, args 
 	// validated by the caller against the config-defined alias map.
 	if promptTemplate.Model != nil && !llmc.IsModelAlias(*promptTemplate.Model) {
 		if _, _, err := llmc.ParseModelString(*promptTemplate.Model); err != nil {
-			return "", "", nil, nil, fmt.Errorf("invalid model format in prompt template: %w", err)
+			return "", "", nil, fmt.Errorf("invalid model format in prompt template: %w", err)
 		}
 	}
 
-	return systemPrompt, userPrompt, promptTemplate.Model, promptTemplate.WebSearch, nil
+	return systemPrompt, userPrompt, &TemplateOptions{
+		Model:     promptTemplate.Model,
+		WebSearch: promptTemplate.WebSearch,
+		Tools:     promptTemplate.Tools,
+	}, nil
 }
 
 // processArgs processes the command line arguments and returns a map of key-value pairs

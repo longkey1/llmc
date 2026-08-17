@@ -131,7 +131,7 @@ func TestChat(t *testing.T) {
 		t.Errorf("request model = %v, want gpt-4 (provider prefix stripped)", gotReq.Model)
 	}
 	// Chat delegates to ChatWithHistory, so the input is a single-message array
-	wantInput := []InputMessage{{Role: "user", Content: "hello"}}
+	wantInput := []InputItem{{Role: "user", Content: "hello"}}
 	if len(gotReq.Input) != 1 || gotReq.Input[0] != wantInput[0] {
 		t.Errorf("request input = %v, want %v", gotReq.Input, wantInput)
 	}
@@ -257,7 +257,7 @@ func TestChatWithHistory(t *testing.T) {
 	var gotBody struct {
 		Model        string             `json:"model"`
 		Instructions string             `json:"instructions"`
-		Input        []InputMessage     `json:"input"`
+		Input        []InputItem        `json:"input"`
 		Tools        []ResponsesAPITool `json:"tools"`
 	}
 
@@ -298,7 +298,7 @@ func TestChatWithHistory(t *testing.T) {
 	if gotBody.Instructions != "be helpful" {
 		t.Errorf("instructions = %q, want %q", gotBody.Instructions, "be helpful")
 	}
-	wantInput := []InputMessage{
+	wantInput := []InputItem{
 		{Role: "user", Content: "first question"},
 		{Role: "assistant", Content: "first answer"},
 		{Role: "user", Content: "second question"},

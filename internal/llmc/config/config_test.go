@@ -384,3 +384,53 @@ terra = "openai:openai/gpt-terra"
 		}
 	}
 }
+
+func TestLoadConfigExecPolicy(t *testing.T) {
+	useConfigFile(t, `
+enable_tools = true
+exec_unlisted = "deny"
+exec_env_mode = "minimal"
+exec_env_passthrough = ["GITHUB_TOKEN"]
+
+[exec_allowed_commands]
+git = ["status", "diff"]
+ls = []
+
+[exec_denied_commands]
+rm = []
+npm = ["publish"]
+`)
+
+	cfg, err := LoadConfig()
+	if err != nil {
+		t.Fatalf("LoadConfig() unexpected error: %v", err)
+	}
+
+	if !cfg.EnableTools {
+		t.Error("EnableTools = false, want true")
+	}
+	gitSubs, ok := cfg.ExecAllowedCommands["git"]
+	if !ok || len(gitSubs) != 2 || gitSubs[0] != "status" || gitSubs[1] != "diff" {
+		t.Errorf("ExecAllowedCommands[git] = %v, want [status diff]", gitSubs)
+	}
+	lsSubs, ok := cfg.ExecAllowedCommands["ls"]
+	if !ok || len(lsSubs) != 0 {
+		t.Errorf("ExecAllowedCommands[ls] = %v, want an empty list (all subcommands)", lsSubs)
+	}
+	if _, ok := cfg.ExecDeniedCommands["rm"]; !ok {
+		t.Errorf("ExecDeniedCommands = %v, want an rm entry", cfg.ExecDeniedCommands)
+	}
+	npmSubs := cfg.ExecDeniedCommands["npm"]
+	if len(npmSubs) != 1 || npmSubs[0] != "publish" {
+		t.Errorf("ExecDeniedCommands[npm] = %v, want [publish]", npmSubs)
+	}
+	if cfg.ExecUnlisted != "deny" {
+		t.Errorf("ExecUnlisted = %q, want deny", cfg.ExecUnlisted)
+	}
+	if cfg.ExecEnvMode != "minimal" {
+		t.Errorf("ExecEnvMode = %q, want minimal", cfg.ExecEnvMode)
+	}
+	if len(cfg.ExecEnvPassthrough) != 1 || cfg.ExecEnvPassthrough[0] != "GITHUB_TOKEN" {
+		t.Errorf("ExecEnvPassthrough = %v, want [GITHUB_TOKEN]", cfg.ExecEnvPassthrough)
+	}
+}
