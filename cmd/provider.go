@@ -11,6 +11,7 @@ import (
 	"github.com/longkey1/llmc/internal/gemini"
 	"github.com/longkey1/llmc/internal/llmc"
 	"github.com/longkey1/llmc/internal/llmc/config"
+	"github.com/longkey1/llmc/internal/ollama"
 	"github.com/longkey1/llmc/internal/openai"
 )
 
@@ -33,8 +34,10 @@ func newProviderByName(cfg *config.Config, provider string) (llmc.Provider, erro
 		return gemini.NewProvider(cfg), nil
 	case anthropic.ProviderName:
 		return anthropic.NewProvider(cfg), nil
+	case ollama.ProviderName:
+		return ollama.NewProvider(cfg), nil
 	default:
-		return nil, fmt.Errorf("unsupported provider: %s (supported: openai, gemini, anthropic)", provider)
+		return nil, fmt.Errorf("unsupported provider: %s (supported: openai, gemini, anthropic, ollama)", provider)
 	}
 }
 

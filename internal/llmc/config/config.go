@@ -17,6 +17,8 @@ type Config struct {
 	GeminiToken             string            `toml:"gemini_token" mapstructure:"gemini_token"`
 	AnthropicBaseURL        string            `toml:"anthropic_base_url" mapstructure:"anthropic_base_url"`
 	AnthropicToken          string            `toml:"anthropic_token" mapstructure:"anthropic_token"`
+	OllamaBaseURL           string            `toml:"ollama_base_url" mapstructure:"ollama_base_url"`
+	OllamaToken             string            `toml:"ollama_token" mapstructure:"ollama_token"`
 	PromptDirs              []string          `toml:"prompt_dirs" mapstructure:"prompt_dirs"`
 	EnableWebSearch         bool              `toml:"enable_web_search" mapstructure:"enable_web_search"`
 	SessionMessageThreshold int               `toml:"session_message_threshold" mapstructure:"session_message_threshold"` // 0 = disabled
@@ -50,6 +52,8 @@ func NewDefaultConfig(promptDir string) *Config {
 		GeminiToken:             "", // No default, use LLMC_GEMINI_TOKEN env var or set in config file
 		AnthropicBaseURL:        "https://api.anthropic.com/v1",
 		AnthropicToken:          "", // No default, use LLMC_ANTHROPIC_TOKEN env var or set in config file
+		OllamaBaseURL:           "http://localhost:11434/v1",
+		OllamaToken:             "", // Optional: local Ollama needs no token; set for authenticated remote servers
 		PromptDirs:              []string{promptDir},
 		EnableWebSearch:         false,
 		SessionMessageThreshold: 50, // Default threshold (0 = disabled)
@@ -68,9 +72,11 @@ func LoadConfig() (*Config, error) {
 	config.OpenAIToken, _ = expandEnvVar(config.OpenAIToken)
 	config.GeminiToken, _ = expandEnvVar(config.GeminiToken)
 	config.AnthropicToken, _ = expandEnvVar(config.AnthropicToken)
+	config.OllamaToken, _ = expandEnvVar(config.OllamaToken)
 	config.OpenAIBaseURL, _ = expandEnvVar(config.OpenAIBaseURL)
 	config.GeminiBaseURL, _ = expandEnvVar(config.GeminiBaseURL)
 	config.AnthropicBaseURL, _ = expandEnvVar(config.AnthropicBaseURL)
+	config.OllamaBaseURL, _ = expandEnvVar(config.OllamaBaseURL)
 
 	// Convert prompt directories to absolute paths
 	for i, promptDir := range config.PromptDirs {

@@ -4,7 +4,7 @@ This file provides guidance to AI coding agents (Claude Code, etc.) when working
 
 ## プロジェクト概要
 
-llmcは、複数のLLMプロバイダー(OpenAI, Gemini, Anthropic)と対話するためのGoで書かれたコマンドラインツールです。チャット、プロンプトテンプレート、会話セッション、対話モードをサポートします。
+llmcは、複数のLLMプロバイダー(OpenAI, Gemini, Anthropic, Ollama)と対話するためのGoで書かれたコマンドラインツールです。チャット、プロンプトテンプレート、会話セッション、対話モードをサポートします。
 
 ## 開発コマンド
 
@@ -30,7 +30,9 @@ make re-release tag=<tag> dryrun=false   # 既存タグの再リリース
 
 ### Providerインターフェースによる抽象化
 
-中核は `internal/llmc/llmc.go` の `Provider` インターフェース。全プロバイダー実装(`internal/openai`, `internal/gemini`, `internal/anthropic`)がこれを実装する。各パッケージは `ProviderName` 定数と `NewProvider(cfg)` を公開する。
+中核は `internal/llmc/llmc.go` の `Provider` インターフェース。全プロバイダー実装(`internal/openai`, `internal/gemini`, `internal/anthropic`, `internal/ollama`)がこれを実装する。各パッケージは `ProviderName` 定数と `NewProvider(cfg)` を公開する。
+
+Ollamaのみトークンが省略可能(ローカルサーバーは認証不要)。`GetToken("ollama")` は空文字でもエラーを返さず、プロバイダー側はトークンが設定されている場合のみ `Authorization` ヘッダーを送る。
 
 新プロバイダー追加時に触る箇所:
 1. `internal/<provider>/` に `Provider` 実装を作成(`ProviderName`, `NewProvider` を公開)

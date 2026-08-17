@@ -17,7 +17,7 @@ var configCmd = &cobra.Command{
 This command shows all configuration values loaded from the config file and environment variables.
 
 If a field name is specified, only that field's value is displayed.
-Available fields: configfile, openai_base_url, gemini_base_url, anthropic_base_url, model, openai_token, gemini_token, anthropic_token, promptdirs, websearch, sessionretentiondays
+Available fields: configfile, openai_base_url, gemini_base_url, anthropic_base_url, ollama_base_url, model, openai_token, gemini_token, anthropic_token, ollama_token, promptdirs, websearch, sessionretentiondays
 
 Examples:
   llmc config                      # Show all configuration
@@ -25,9 +25,11 @@ Examples:
   llmc config openai_base_url     # Show only OpenAI base URL
   llmc config gemini_base_url     # Show only Gemini base URL
   llmc config anthropic_base_url  # Show only Anthropic base URL
+  llmc config ollama_base_url     # Show only Ollama base URL
   llmc config openai_token        # Show only OpenAI token
   llmc config gemini_token        # Show only Gemini token
   llmc config anthropic_token     # Show only Anthropic token
+  llmc config ollama_token        # Show only Ollama token
   llmc config promptdirs          # Show only prompt directories
   llmc config websearch           # Show only web search setting
   llmc config sessionretentiondays   # Show only session retention days setting`,
@@ -51,6 +53,8 @@ Examples:
 				fmt.Println(cfg.GeminiBaseURL)
 			case "anthropic_base_url", "anthropicbaseurl":
 				fmt.Println(cfg.AnthropicBaseURL)
+			case "ollama_base_url", "ollamabaseurl":
+				fmt.Println(cfg.OllamaBaseURL)
 			case "model":
 				fmt.Println(cfg.Model)
 			case "openai_token", "openaitoken":
@@ -59,6 +63,8 @@ Examples:
 				fmt.Println(resolveAndMaskToken(cfg, "gemini"))
 			case "anthropic_token", "anthropictoken":
 				fmt.Println(resolveAndMaskToken(cfg, "anthropic"))
+			case "ollama_token", "ollamatoken":
+				fmt.Println(resolveAndMaskToken(cfg, "ollama"))
 			case "promptdirs":
 				// PromptDirs are already absolute paths
 				fmt.Println(strings.Join(cfg.PromptDirs, ","))
@@ -67,7 +73,7 @@ Examples:
 			case "sessionretentiondays":
 				fmt.Println(cfg.SessionRetentionDays)
 			default:
-				return fmt.Errorf("unknown field: %s\nAvailable fields: configfile, openai_base_url, gemini_base_url, anthropic_base_url, model, openai_token, gemini_token, anthropic_token, promptdirs, websearch, sessionretentiondays", args[0])
+				return fmt.Errorf("unknown field: %s\nAvailable fields: configfile, openai_base_url, gemini_base_url, anthropic_base_url, ollama_base_url, model, openai_token, gemini_token, anthropic_token, ollama_token, promptdirs, websearch, sessionretentiondays", args[0])
 			}
 			return nil
 		}
@@ -80,6 +86,8 @@ Examples:
 		fmt.Printf("%-20s: %s\n", "GeminiToken", resolveAndMaskToken(cfg, "gemini"))
 		fmt.Printf("%-20s: %s\n", "AnthropicBaseURL", cfg.AnthropicBaseURL)
 		fmt.Printf("%-20s: %s\n", "AnthropicToken", resolveAndMaskToken(cfg, "anthropic"))
+		fmt.Printf("%-20s: %s\n", "OllamaBaseURL", cfg.OllamaBaseURL)
+		fmt.Printf("%-20s: %s\n", "OllamaToken", resolveAndMaskToken(cfg, "ollama"))
 		fmt.Printf("%-20s: %s\n", "Model", cfg.Model)
 		// PromptDirs are already absolute paths
 		fmt.Printf("%-20s: %s\n", "PromptDirectories", strings.Join(cfg.PromptDirs, ","))
@@ -100,8 +108,9 @@ func maskToken(token string) string {
 // resolveAndMaskToken gets the token for the provider and masks it for display
 func resolveAndMaskToken(cfg *config.Config, provider string) string {
 	token, err := cfg.GetToken(provider)
-	if err != nil {
-		// Return error message if token is not set
+	// GetToken returns an empty token without error for providers whose
+	// token is optional (ollama), so check both cases
+	if err != nil || token == "" {
 		return "(not set)"
 	}
 	return maskToken(token)

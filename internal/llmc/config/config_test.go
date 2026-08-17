@@ -148,6 +148,7 @@ func TestGetBaseURL(t *testing.T) {
 		OpenAIBaseURL:    "https://openai.example.com/v1",
 		GeminiBaseURL:    "https://gemini.example.com/v1beta",
 		AnthropicBaseURL: "https://anthropic.example.com/v1",
+		OllamaBaseURL:    "http://localhost:11434/v1",
 	}
 
 	tests := []struct {
@@ -174,6 +175,12 @@ func TestGetBaseURL(t *testing.T) {
 			cfg:      cfg,
 			provider: "anthropic",
 			want:     "https://anthropic.example.com/v1",
+		},
+		{
+			name:     "ollama",
+			cfg:      cfg,
+			provider: "ollama",
+			want:     "http://localhost:11434/v1",
 		},
 		{
 			name:     "unsupported provider",
@@ -207,6 +214,7 @@ func TestGetToken(t *testing.T) {
 		OpenAIToken:    "openai-token",
 		GeminiToken:    "gemini-token",
 		AnthropicToken: "anthropic-token",
+		OllamaToken:    "ollama-token",
 	}
 
 	tests := []struct {
@@ -235,6 +243,12 @@ func TestGetToken(t *testing.T) {
 			want:     "anthropic-token",
 		},
 		{
+			name:     "ollama",
+			cfg:      cfg,
+			provider: "ollama",
+			want:     "ollama-token",
+		},
+		{
 			name:     "unsupported provider",
 			cfg:      cfg,
 			provider: "unknown",
@@ -245,6 +259,13 @@ func TestGetToken(t *testing.T) {
 			cfg:      &Config{},
 			provider: "gemini",
 			wantErr:  true,
+		},
+		{
+			// Ollama token is optional: empty is not an error
+			name:     "empty ollama token",
+			cfg:      &Config{},
+			provider: "ollama",
+			want:     "",
 		},
 	}
 

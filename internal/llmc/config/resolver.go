@@ -46,6 +46,8 @@ func (c *Config) GetBaseURL(provider string) (string, error) {
 		baseURLValue = c.GeminiBaseURL
 	case "anthropic":
 		baseURLValue = c.AnthropicBaseURL
+	case "ollama":
+		baseURLValue = c.OllamaBaseURL
 	default:
 		return "", fmt.Errorf("unsupported provider: %s", provider)
 	}
@@ -69,6 +71,10 @@ func (c *Config) GetToken(provider string) (string, error) {
 		tokenValue = c.GeminiToken
 	case "anthropic":
 		tokenValue = c.AnthropicToken
+	case "ollama":
+		// A local Ollama server requires no authentication, so an empty
+		// token is valid (unlike the other providers)
+		return c.OllamaToken, nil
 	default:
 		return "", fmt.Errorf("unsupported provider: %s", provider)
 	}

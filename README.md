@@ -1,6 +1,6 @@
 # LLMC - Simple Command Line LLM Client
 
-A command-line tool for interacting with various LLM APIs. Currently supports OpenAI, Google's Gemini, and Anthropic Claude with built-in web search capabilities.
+A command-line tool for interacting with various LLM APIs. Currently supports OpenAI, Google's Gemini, and Anthropic Claude with built-in web search capabilities, plus local models via Ollama.
 
 **Supported Platforms:** Linux and macOS
 
@@ -25,6 +25,7 @@ llmc init
 # Set: openai_token = "$OPENAI_API_KEY"
 #   or gemini_token = "$GEMINI_API_KEY"
 #   or anthropic_token = "$ANTHROPIC_API_KEY"
+# (Ollama needs no token; just run a local Ollama server)
 
 # 3. Start chatting
 llmc chat "Hello, how are you?"
@@ -51,6 +52,7 @@ llmc chat -e
 llmc chat --model openai:gpt-4 "Hello"
 llmc chat -m gemini:gemini-2.0-flash "Hello"
 llmc chat -m anthropic:claude-3-5-sonnet-20241022 "Hello"
+llmc chat -m ollama:llama3:latest "Hello"  # Local model via Ollama
 
 # Use a config-defined model alias (see "Model Aliases")
 llmc chat -m @sonnet "Hello"
@@ -466,10 +468,11 @@ llmc models
 llmc models openai
 llmc models gemini
 llmc models anthropic
+llmc models ollama       # Locally installed Ollama models
 ```
 
 **Token Requirements:**
-- When listing **all providers** (`llmc models`): Providers without configured tokens are silently skipped
+- When listing **all providers** (`llmc models`): Providers without configured tokens are silently skipped (Ollama needs no token, so it is queried; a warning is shown if the server is unreachable)
 - When listing a **specific provider** (`llmc models openai`): Returns an error if the token is not configured
 
 The output shows:
@@ -570,11 +573,13 @@ export LLMC_MODEL="openai:gpt-4"
 export LLMC_OPENAI_TOKEN="your-openai-api-token"
 export LLMC_GEMINI_TOKEN="your-gemini-api-token"
 export LLMC_ANTHROPIC_TOKEN="your-anthropic-api-token"
+export LLMC_OLLAMA_TOKEN="your-ollama-token"  # Optional: only for authenticated remote servers
 
 # Set API base URLs (optional)
 export LLMC_OPENAI_BASE_URL="https://api.openai.com/v1"
 export LLMC_GEMINI_BASE_URL="https://generativelanguage.googleapis.com/v1beta"
 export LLMC_ANTHROPIC_BASE_URL="https://api.anthropic.com/v1"
+export LLMC_OLLAMA_BASE_URL="http://localhost:11434/v1"
 
 # Set prompt directories (comma-separated)
 export LLMC_PROMPT_DIRS="/path/to/prompts,/another/directory"
@@ -640,12 +645,14 @@ model = "openai:gpt-4.1"  # Format: provider:model
 openai_token = "$OPENAI_API_KEY"        # Expands from environment variable
 gemini_token = "${GEMINI_API_KEY}"      # Both syntaxes work
 anthropic_token = "$ANTHROPIC_API_KEY"
+# ollama_token = "..."                  # Optional: local Ollama needs no token
 
 # API base URLs (optional - uses defaults if not set)
 # Also supports environment variable expansion
 openai_base_url = "https://api.openai.com/v1"
 gemini_base_url = "https://generativelanguage.googleapis.com/v1beta"
 anthropic_base_url = "https://api.anthropic.com/v1"
+ollama_base_url = "http://localhost:11434/v1"
 
 # Prompt directories (optional - uses defaults if not set)
 prompt_dirs = ["/path/to/prompts", "/another/directory"]
@@ -677,6 +684,8 @@ llmc config gemini_base_url          # → https://generativelanguage.googleapis
 llmc config gemini_token             # → ... (masked) or "(not set)"
 llmc config anthropic_base_url       # → https://api.anthropic.com/v1
 llmc config anthropic_token          # → ... (masked) or "(not set)"
+llmc config ollama_base_url          # → http://localhost:11434/v1
+llmc config ollama_token             # → ... (masked) or "(not set)"
 llmc config promptdirs               # → /path/to/prompts,/another/directory
 llmc config websearch                # → false
 llmc config sessionretentiondays     # → 30
@@ -895,6 +904,8 @@ LLMC uses provider-specific APIs:
 **Gemini**: Supports all Gemini models that support the `generateContent` method. The `llmc models gemini` command fetches the latest available models from Google's Gemini API.
 
 **Anthropic**: Uses Messages API with support for Claude 3 and Claude 4 models (Opus, Sonnet, Haiku). The `llmc models anthropic` command fetches the latest available models from Anthropic's API.
+
+**Ollama**: Uses Ollama's OpenAI-compatible Chat Completions API (`http://localhost:11434/v1` by default) to run local models. No API token is required for a local server; set `ollama_token` only when connecting to a remote server behind an authenticating proxy. Web search is not supported. The `llmc models ollama` command lists locally installed models.
 
 The models list is dynamically retrieved from each provider's API, so you'll always see the most current available models without needing to update the tool.
 

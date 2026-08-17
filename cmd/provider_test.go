@@ -8,6 +8,7 @@ import (
 	"github.com/longkey1/llmc/internal/anthropic"
 	"github.com/longkey1/llmc/internal/gemini"
 	"github.com/longkey1/llmc/internal/llmc/config"
+	"github.com/longkey1/llmc/internal/ollama"
 	"github.com/longkey1/llmc/internal/openai"
 )
 
@@ -32,6 +33,13 @@ func TestNewProvider(t *testing.T) {
 			name:     "anthropic provider",
 			model:    "anthropic:claude-3-5-sonnet-20241022",
 			wantType: "anthropic",
+		},
+		{
+			// Ollama model IDs contain a colon; ParseModelString splits on
+			// the first one only
+			name:     "ollama provider",
+			model:    "ollama:llama3:latest",
+			wantType: "ollama",
 		},
 		{
 			name:    "unsupported provider",
@@ -68,6 +76,10 @@ func TestNewProvider(t *testing.T) {
 			case "anthropic":
 				if _, ok := got.(*anthropic.Provider); !ok {
 					t.Errorf("newProvider() = %T, want *anthropic.Provider", got)
+				}
+			case "ollama":
+				if _, ok := got.(*ollama.Provider); !ok {
+					t.Errorf("newProvider() = %T, want *ollama.Provider", got)
 				}
 			}
 		})

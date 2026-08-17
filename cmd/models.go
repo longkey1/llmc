@@ -10,6 +10,7 @@ import (
 	"github.com/longkey1/llmc/internal/gemini"
 	"github.com/longkey1/llmc/internal/llmc"
 	"github.com/longkey1/llmc/internal/llmc/config"
+	"github.com/longkey1/llmc/internal/ollama"
 	"github.com/longkey1/llmc/internal/openai"
 	"github.com/spf13/cobra"
 )
@@ -21,7 +22,7 @@ var modelsCmd = &cobra.Command{
 	Long: `List all available models for the specified provider.
 Fetches the latest model information directly from the provider's API.
 
-Supported providers: openai, gemini, anthropic
+Supported providers: openai, gemini, anthropic, ollama
 
 If no provider is specified, lists models from all providers.
 
@@ -29,7 +30,8 @@ Example:
   llmc models              # List models from all providers
   llmc models openai       # List OpenAI models
   llmc models gemini       # List Gemini models
-  llmc models anthropic    # List Anthropic models`,
+  llmc models anthropic    # List Anthropic models
+  llmc models ollama       # List locally installed Ollama models`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// Load config to get tokens
@@ -47,12 +49,12 @@ Example:
 
 		if !providerExplicitlySpecified {
 			// No provider specified, list all
-			providers = []string{openai.ProviderName, gemini.ProviderName, anthropic.ProviderName}
+			providers = []string{openai.ProviderName, gemini.ProviderName, anthropic.ProviderName, ollama.ProviderName}
 		} else {
 			targetProvider := args[0]
 			// Validate provider
-			if targetProvider != openai.ProviderName && targetProvider != gemini.ProviderName && targetProvider != anthropic.ProviderName {
-				return fmt.Errorf("unsupported provider '%s'\nSupported providers: openai, gemini, anthropic", targetProvider)
+			if targetProvider != openai.ProviderName && targetProvider != gemini.ProviderName && targetProvider != anthropic.ProviderName && targetProvider != ollama.ProviderName {
+				return fmt.Errorf("unsupported provider '%s'\nSupported providers: openai, gemini, anthropic, ollama", targetProvider)
 			}
 			providers = []string{targetProvider}
 		}
@@ -80,6 +82,7 @@ Example:
 			}
 
 			// Get token for the specified provider
+			// (never fails for ollama, whose token is optional)
 			token, err := cfg.GetToken(targetProvider)
 			if err != nil {
 				// If provider was not explicitly specified, skip silently
@@ -101,6 +104,8 @@ Example:
 				cfg.GeminiToken = token
 			case anthropic.ProviderName:
 				cfg.AnthropicToken = token
+			case ollama.ProviderName:
+				cfg.OllamaToken = token
 			}
 
 			if verbose {

@@ -106,6 +106,8 @@ func initConfig() {
 	viper.SetDefault("gemini_token", defaultConfig.GeminiToken)
 	viper.SetDefault("anthropic_base_url", defaultConfig.AnthropicBaseURL)
 	viper.SetDefault("anthropic_token", defaultConfig.AnthropicToken)
+	viper.SetDefault("ollama_base_url", defaultConfig.OllamaBaseURL)
+	viper.SetDefault("ollama_token", defaultConfig.OllamaToken)
 	viper.SetDefault("prompt_dirs", defaultPromptDirs)
 	viper.SetDefault("enable_web_search", defaultConfig.EnableWebSearch)
 	viper.SetDefault("session_message_threshold", defaultConfig.SessionMessageThreshold)
@@ -118,6 +120,8 @@ func initConfig() {
 	_ = viper.BindEnv("gemini_token", "LLMC_GEMINI_TOKEN")
 	_ = viper.BindEnv("anthropic_base_url", "LLMC_ANTHROPIC_BASE_URL")
 	_ = viper.BindEnv("anthropic_token", "LLMC_ANTHROPIC_TOKEN")
+	_ = viper.BindEnv("ollama_base_url", "LLMC_OLLAMA_BASE_URL")
+	_ = viper.BindEnv("ollama_token", "LLMC_OLLAMA_TOKEN")
 	_ = viper.BindEnv("session_message_threshold", "LLMC_SESSION_MESSAGE_THRESHOLD")
 	_ = viper.BindEnv("session_retention_days", "LLMC_SESSION_RETENTION_DAYS")
 
@@ -177,6 +181,7 @@ func initConfig() {
 		fmt.Fprintln(os.Stderr, "  LLMC_OPENAI_BASE_URL:", viper.GetString("openai_base_url"))
 		fmt.Fprintln(os.Stderr, "  LLMC_GEMINI_BASE_URL:", viper.GetString("gemini_base_url"))
 		fmt.Fprintln(os.Stderr, "  LLMC_ANTHROPIC_BASE_URL:", viper.GetString("anthropic_base_url"))
+		fmt.Fprintln(os.Stderr, "  LLMC_OLLAMA_BASE_URL:", viper.GetString("ollama_base_url"))
 		fmt.Fprintln(os.Stderr, "  LLMC_PROMPT_DIRS:", viper.GetStringSlice("prompt_dirs"))
 		fmt.Fprintln(os.Stderr, "  LLMC_ENABLE_WEB_SEARCH:", viper.GetBool("enable_web_search"))
 	}
